@@ -1,0 +1,19 @@
+#ifndef __constants_H__
+#define __constants_H__
+
+#define OLED_RESET 4
+#define DISPLAY_I2C_ADDR 0x3C
+
+#define DISPLAY_WIDTH 128
+#define DISPLAY_HEIGHT 32
+
+#define CHAR_XSIZE 6
+#define CHAR_YSIZE 8
+#define SCREEN_MAX_NB_CHARS_PER_LINE 21
+#define CURSOR_Y_FIRST_LINE 0
+#define CURSOR_Y_SECOND_LINE CHAR_YSIZE
+#define CURSOR_Y_THIRD_LINE CHAR_YSIZE*2
+#define CURSOR_Y_FOURTH_LINE CHAR_YSIZE*3
+
+#endif
+

@@ -118,7 +118,6 @@ static byte is_box (byte x)
   return pgm_read_byte (& s_inv [x]) ;
 }
 
-
 /* copying and xoring utilities */
 
 void AES::copy_n_bytes (byte * d, byte * s, byte nn)

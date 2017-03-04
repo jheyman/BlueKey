@@ -5,6 +5,8 @@
 
 uint16_t EEPROM::dataOp(uint16_t eeaddress, byte* data, uint8_t len, uint8_t write)
 {
+  //printFreeRam("EEPROMdataOP",0);
+  
   while(len)
   {
     uint8_t lenForPage;

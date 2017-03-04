@@ -21,9 +21,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Entropy.  If not, see <http://www.gnu.org/licenses/>.
 
+
 #include <Arduino.h>
 #include "Entropy.h"
-
 
 const uint8_t WDT_MAX_8INT=0xFF;
 const uint16_t WDT_MAX_16INT=0xFFFF;
@@ -38,7 +38,6 @@ const uint32_t WDT_MAX_32INT=0xFFFFFFFF;
  volatile uint8_t gWDT_pool_end;
  volatile uint8_t gWDT_pool_count;
  volatile uint32_t gWDT_entropy_pool[WDT_POOL_SIZE];
-
 
 // This function initializes the global variables needed to implement the circular entropy pool and
 // the buffer that holds the raw Timer 1 values that are used to create the entropy pool.  It then
@@ -226,3 +225,4 @@ ISR(WDT_vect)
 // The library implements a single global instance.  There is no need, nor will the library 
 // work properly if multiple instances are created.
 EntropyClass Entropy;
+

@@ -16,27 +16,13 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __eeprom_H__
-#define __eeprom_H__
-#include <Arduino.h>
+#ifndef __display_H__
+#define __display_H__
 
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include "constants.h"
 
-//#define I2E_Write(addr, data, len) 0
-//#define I2E_Read(addr, data, len) 0
-
-class EEPROM
-{
-public:
-  void power(uint8_t state);
-  
-  //Requires page-aligned eeaddress, any len valid, returns addresss after last byte read/written.
-  uint16_t dataOp(uint16_t eeaddress, byte* data, uint8_t len, uint8_t write);
-
-};
-
-extern EEPROM eeprom;
-
-#define I2E_Write(addr, data, len) eeprom.dataOp(addr, data, len, 1)
-#define I2E_Read(addr, data, len) eeprom.dataOp(addr, data, len, 0)
+extern Adafruit_SSD1306 display;
 
 #endif
