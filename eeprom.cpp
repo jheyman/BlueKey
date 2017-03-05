@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include "eeprom.h"
-
-#define EEPROM_I2C_ADDR 0x50
+#include "constants.h"
 
 uint16_t EEPROM::dataOp(uint16_t eeaddress, byte* data, uint8_t len, uint8_t write)
 {

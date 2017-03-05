@@ -20,6 +20,7 @@
 #include "eeprom.h"
 #include "Entropy.h"
 #include "display.h" 
+#include "utils.h"
 #include <util/atomic.h>
 #include <Wire.h>
 #include <TermTool.h>
@@ -58,6 +59,7 @@ const static char eepromIdentifierTxt[HEADER_EEPROM_IDENTIFIER_LEN] PROGMEM  =  
 #define headerIdentifierOffsetAndIv(iv) I2E_Read( EEPROM_IV_LOCATION, iv, 16 )
 #define entryOffset( entryNum ) ((EEPROM_ENTRY_START_ADDR)+(EEPROM_ENTRY_DISTANCE*entryNum))
 
+
 bool __attribute__ ((noinline)) EncryptedStorage::readHeader(char* deviceName)
 {
   byte buf[HEADER_EEPROM_IDENTIFIER_LEN];
@@ -83,6 +85,9 @@ void __attribute__ ((noinline)) EncryptedStorage::setBanner(char* banner)
   I2E_Write( HEADER_EEPROM_IDENTIFIER_LEN,(byte*)banner, 32 );
 }
 
+
+
+
 bool __attribute__ ((noinline)) EncryptedStorage::unlock( byte* k )
 {
   byte key[32];
@@ -90,26 +95,36 @@ bool __attribute__ ((noinline)) EncryptedStorage::unlock( byte* k )
   byte iv[16];
   bool success = FALSE;
 
+  //printHexBuff(key, "k", 32);
+
   uint16_t offset = headerIdentifierOffsetAndIv(iv);
 
   //Read the encrypted password which comes after the IV
   offset = I2E_Read( offset, key, 32 );
+
+  //printHexBuff(key, "enc_key", 32);
   
   //Read the background noise for the password
   I2E_Read( offset, bck, 32 );
+
+  //printHexBuff(key, "bck", 32);
   
   //xor it with zero padded key
   for(uint8_t i = 0 ; i < 32; i++ )
   {
     k[i] ^= bck[i];
   }
+
+  //printHexBuff(k, "xor_k", 32);
   
   //Set key
   aes.set_key(k, 256);  
 
   //Decrypt
   if( aes.cbc_decrypt (key, key, 2, iv) == SUCCESS )
-  {
+  {  
+    //printHexBuff(key, "dec_key", 32);
+      
     success=TRUE;
     for(uint8_t i = 0 ; i < 32; i++ )
     {
@@ -202,6 +217,7 @@ void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, en
 
 void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
 {
+  /*
   uint16_t offset = entryOffset(entryNum);
   entry_t dat;
   entry_t dat2;
@@ -229,6 +245,7 @@ void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
      dat.passwordOffset=0;
      putEntry( entryNum, &dat );
   }
+  */
 }
 
 void __attribute__ ((noinline)) EncryptedStorage::changePass( byte* newPass, byte* oldPass )
@@ -266,14 +283,8 @@ void __attribute__ ((noinline)) EncryptedStorage::changePass( byte* newPass, byt
   //Clean up a bit
   memset( newPass, 0, 32 );
   memset( oldPass, 0, 32 );
-  memset( &entry, 0, sizeof(entry) );
-
-//  debugPrint((char*)F("changePass DONE"));
-  
+  memset( &entry, 0, sizeof(entry) ); 
 }
-
-
-//extern void printCentered(char* msg);
 
 void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name )
 {
@@ -281,10 +292,14 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
 
   for(uint16_t i=0; i < NUM_ENTRIES; i++ )
   {
-    Serial.write('\n');txt(i);Serial.write('/');txt(NUM_ENTRIES);
-    //printCentered("...formatting...");
+    //Serial.write('\n');txt(i);Serial.write('/');txt(NUM_ENTRIES);
+    char tmp[24];
     delEntry((uint8_t)i);
+    sprintf(tmp, "Formatting: %d/%d", i+1, NUM_ENTRIES);
+    printCentered(tmp);    
   }
+
+  //printHexBuff(pass, "UserPass", 32);
   
   putPass(pass);
     
@@ -294,10 +309,8 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
   
   //Write the cleartext stuff. Identifier and Name.
   I2E_Write( EEPROM_IDENTIFIER_LOCATION, identifier, HEADER_EEPROM_IDENTIFIER_LEN );
- // Serial.print(F("Identifier Written\r\n"));
   
   I2E_Write( EEPROM_DEVICENAME_LOCATION,(byte*)name, 32 );
- // Serial.print(F("Name Written\r\n"));
 }
 
 //Find used and all 0  IV's so we can avoid them (0 avoided because we use it for detecting empty entry)
@@ -335,7 +348,6 @@ static bool __attribute__ ((noinline)) ivIsInvalid( byte* dst )
 
 void __attribute__ ((noinline)) EncryptedStorage::putPass( byte* pass )
 {
- 
   byte iv[16];
   byte key[32];
   byte bck[32];
@@ -349,13 +361,16 @@ void __attribute__ ((noinline)) EncryptedStorage::putPass( byte* pass )
   {
     pass[i] ^= bck[i];
   }
+
+  //printHexBuff(pass, "PASS", 32);
  
   //Generate IV
   putIv( iv );
   
   //Write the IV before it's changed by the encryption.
   I2E_Write( EEPROM_IV_LOCATION, iv, 16 );
- // Serial.print(F("Iv Written\r\n"));
+
+  //printHexBuff(iv, "iv", 16);
 
   //Encrypt the password.
   aes.set_key(pass, 256);  
@@ -363,10 +378,13 @@ void __attribute__ ((noinline)) EncryptedStorage::putPass( byte* pass )
 
   //Write encrypted key
   I2E_Write(EEPROM_PASS_CIPHER_LOCATION, key, 32);
+
+  //printHexBuff(key, "EEkey", 32);
   
   //Write background noise
-  I2E_Write(EEPROM_PASS_BACKGROUND_LOCATION, bck, 32);  
-  
+  I2E_Write(EEPROM_PASS_BACKGROUND_LOCATION, bck, 32); 
+
+  //printHexBuff(bck, "EEbck", 32);
 }
 
 void __attribute__ ((noinline)) EncryptedStorage::putIv( byte* dst )
@@ -387,17 +405,16 @@ uint8_t EncryptedStorage::crc8(const uint8_t *addr, uint8_t len)
   uint8_t crc = 0;
 
   while (len--) {
-          uint8_t inbyte = *addr++;
-          for (uint8_t i = 8; i; i--) {
-                  uint8_t mix = (crc ^ inbyte) & 0x01;
-                  crc >>= 1;
-                  if (mix) crc ^= 0x8C;
-                  inbyte >>= 1;
-          }
+    uint8_t inbyte = *addr++;
+    for (uint8_t i = 8; i; i--) {
+      uint8_t mix = (crc ^ inbyte) & 0x01;
+      crc >>= 1;
+      if (mix) crc ^= 0x8C;
+      inbyte >>= 1;
+    }
   }
   return crc;
 }
-
 
 //R = Ready, W = Wait, C =CRC error, O = OK, F = Failure, E=End
 void __attribute__ ((noinline)) EncryptedStorage::importData()
@@ -472,7 +489,6 @@ uint16_t __attribute__ ((noinline)) EncryptedStorage::getNextEmpty()
     {
       break;
     }
-
   }
   
   return( idx );
