@@ -22,12 +22,15 @@
 #include <Wire.h>
 #include <TermTool.h>
 
-void printCentered(char* msg);  
-void printCenteredStoredString(uint8_t* storedString);
+void displayMessage(char* msg, int X, int Y); 
+void displayCenteredMessage(char* msg);  
+void displayCenteredMessageFromStoredString(uint8_t* storedString);
 void testEEPROM(int index);
 void messUpEEPROMFormat();
 byte getStringFromFlash(char* buffer, uint8_t* storedString);
 void printHexBuff(byte* buff, char* name, int len);
+void paintStack();
+uint16_t StackMarginWaterMark(void);
 void printSRAMMap();
 void I2Cscan();
 int mod(int x, int m);

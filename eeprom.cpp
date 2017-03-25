@@ -9,7 +9,8 @@ uint16_t EEPROM::dataOp(uint16_t eeaddress, byte* data, uint8_t len, uint8_t wri
   while(len)
   {
     uint8_t lenForPage;
-    lenForPage = (len > 31)?32:len;
+    //lenForPage = (len > 31)?32:len;
+    lenForPage = (len > 15)?16:len;
     
     uint8_t currentPageOffset = eeaddress%128;
     uint8_t nextPageOffset = (eeaddress+lenForPage)%128;

@@ -27,8 +27,26 @@ typedef struct {
   char title[32]; // Title needs to be two blocks for seperate decryption
   uint8_t seperator;		//Character to type between user and pass (ignored when macro)
   uint8_t passwordOffset;	//Where the password starts in the string of data (0 = macro)
-  char data[190];
+  //char data[190];
+  char data[78];
 } entry_t;
+
+#define HEADER_SIZE 256
+//We reserve 1024 bytes for a rainy day
+#define EEPROM_ENTRY_START_ADDR 1280
+
+//#define ENTRY_SIZE 224
+#define ENTRY_SIZE 112
+
+//#define EEPROM_ENTRY_DISTANCE 240 //EntrySize + 16 for iv
+#define EEPROM_ENTRY_DISTANCE 128 //EntrySize + 16 for iv
+
+//#define ENTRY_FULL_CBC_BLOCKS 14 //Blocksize / 16 for encryption
+#define ENTRY_FULL_CBC_BLOCKS 7//Blocksize / 16 for encryption
+
+#define ENTRY_NAME_CBC_BLOCKS 2 //Blocksize of decryption of title
+
+#define NUM_ENTRIES 16
 
 class EncryptedStorage
 {

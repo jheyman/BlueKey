@@ -17,6 +17,28 @@ const static char NEED_FORMAT[] PROGMEM = "Format needed";
 const static char LOGIN_GRANTED[] PROGMEM = "OK";
 const static char LOGIN_DENIED[] PROGMEM = "DENIED";
 
+const static char DEVICE_FULL[] PROGMEM = "Error: device full";
+
+const static char ACCOUNT_TITLE_INPUT[] PROGMEM = "Account? ";
+const static char ACCOUNT_LOGIN_INPUT[] PROGMEM = "Login? ";
+const static char PASSWORD_LENGTH_INPUT[] PROGMEM = "Pwd length? ";
+
+// Rules:
+// max 21 characters per line, minus left triangle cursor and one space => max 19 chars max per line, including starting and trailing space
+// also, to avoid avoid to explicitly clear the display, make all entries the same size so that all text gets overwritten.
+                                          // "  XXXXXXXXXXXXXXXXX ";
+const static char MENU_GETPWD[] PROGMEM   = "Get Password  ";
+const static char MENU_SETPWD[] PROGMEM   = "Set Password  ";
+const static char MENU_CLEARPWD[] PROGMEM = "Clear Password";
+const static char MENU_FORMAT[] PROGMEM   = "Format        ";
+#define MAIN_MENU_NB_ENTRIES 4
+
+const static char MENU_SETPWD_GENERATE[] PROGMEM      = "Generate";
+const static char MENU_SETPWD_MANUALINPUT[] PROGMEM   = "Manually";
+#define MENU_SETPWD_NB_ENTRIES 2
+
+const static char MENU_SETPWD_GENERATE_LENGTH[] PROGMEM      = "Length?";
+
 ////////////////////
 // KNOB management
 ////////////////////
@@ -143,7 +165,7 @@ void __attribute__ ((noinline)) getCodeFromUser(char* dst, const uint8_t numChar
 
 bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, int firstAsciiChar, int lastAsciiChar)
 {
-    char buffer[128];
+    char buffer[100]; // minimized to save stack space while fitting worst case of firstAscii=33, lastAscii=126, and DONE_STRING=4 bytes => 98 bytes 
    
     int nbChars = lastAsciiChar - firstAsciiChar +1;
     int DONE_chars_start_index, DONE_chars_stop_index;
@@ -206,18 +228,14 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
       // If knob switch was pushed, validate current char
       if (checkbuttonPushed()) {
 
-        //if (buffer[pivot_char] == '^') 
-        //if (buffer[pivot_char] == 0) 
         if ((pivot_char >= DONE_chars_start_index) && (pivot_char <= DONE_chars_stop_index)) 
           break;
           
         display.setCursor(cursorX,0);
-        //display.print((char)(pivot_char+firstAsciiChar)); 
         display.print(buffer[pivot_char]); 
         display.display();        
         cursorX += CHAR_XSIZE;
           
-        //dst[nbCharsValidated] = (char)(pivot_char+firstAsciiChar);
         dst[nbCharsValidated] = (buffer[pivot_char]);
         
         nbCharsValidated++;
@@ -277,6 +295,180 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
     return true;
 }
 
+int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) {
+  
+  byte selected_index = 0;
+  byte display_line_index = 0;
+  char menuEntryText[32];
+  bool needRefresh = true;
+
+  display.clearDisplay();
+ 
+  while (1) {
+  
+    // If knob switch was pushed, return currently selected entry
+    if (checkbuttonPushed()) {
+        if (nbEntries > SCREEN_MAX_NB_LINES) {
+          return (mod(selected_index+display_line_index, nbEntries));
+        } else {
+          return selected_index;
+        }
+    } 
+    else if (knobIndexIncreased) {
+      knobIndexIncreased = false;
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index+1,nbEntries);
+      } else {
+        if (selected_index<(nbEntries-1))
+          selected_index++;
+      }
+      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
+        display_line_index++;
+      needRefresh = true;      
+    }
+    else if (knobIndexDecreased) {
+      knobIndexDecreased = false;
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index-1,nbEntries);
+      } else {
+        if (selected_index>0)
+          selected_index--;
+      }
+      if (display_line_index>0)
+        display_line_index--;
+      needRefresh = true; 
+    }
+  
+   if (needRefresh) {
+    needRefresh = false;
+      int y = 0;
+      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
+
+        if (i>= nbEntries) {
+          break;
+        } else {
+
+          if (nbEntries > SCREEN_MAX_NB_LINES) {
+            getStringFromFlash(menuEntryText, menutexts[mod(selected_index+i,nbEntries)]);
+          } else {
+            getStringFromFlash(menuEntryText, menutexts[i]);
+          }
+          display.setCursor((DISPLAY_WIDTH - (strlen(menuEntryText)+4)*CHAR_XSIZE)/2,y);
+        
+          if (i==display_line_index) {
+            display.print((char)16);
+            display.print(' ');
+            display.print(menuEntryText);
+          } else {
+            display.print("  ");
+            display.print(menuEntryText);
+          }  
+        
+          display.display();
+          y+= CHAR_YSIZE;
+        }
+      }        
+   }
+     
+   delay(1);
+  }
+}
+
+int __attribute__ ((noinline)) main_menu() {
+  uint8_t* menutexts[MAIN_MENU_NB_ENTRIES];
+  menutexts[0] =   (uint8_t*)&MENU_GETPWD;
+  menutexts[1] =   (uint8_t*)&MENU_SETPWD;
+  menutexts[2] =   (uint8_t*)&MENU_CLEARPWD;
+  menutexts[3] =   (uint8_t*)&MENU_FORMAT;
+  return generic_menu(MAIN_MENU_NB_ENTRIES, menutexts);
+}
+
+int __attribute__ ((noinline)) menu_set_pwd() {
+  uint8_t* menutexts[MENU_SETPWD_NB_ENTRIES];
+  menutexts[0] =   (uint8_t*)&MENU_SETPWD_GENERATE;
+  menutexts[1] =   (uint8_t*)&MENU_SETPWD_MANUALINPUT;
+  return generic_menu(MENU_SETPWD_NB_ENTRIES, menutexts);
+}
+
+void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
+{
+  char pool[10+26+26];
+  int pool_index = 0;
+  
+  for( uint8_t idx = 48; idx < 58; idx++)
+  {
+    pool[pool_index++] = idx;
+  }
+  
+  for( uint8_t idx = 65; idx < 91; idx++)
+  {
+    pool[pool_index++] = idx;
+  }
+
+  for( uint8_t idx = 97; idx < 123; idx++)
+  {
+    pool[pool_index++] = idx;
+  }  
+
+  // pick from the pool of letters to fill password randomly
+  for( uint8_t idx = 0; idx < len; idx++)
+  {
+    dst[idx] = pool[(uint8_t)Entropy.random(10+26+25)];
+  }
+  dst[len]=0;
+}
+
+void __attribute__ ((noinline)) generatePassword() {
+  uint16_t entryNum = ES.getNextEmpty();
+  entry_t entry;
+  char len_string[3];
+  int len;
+
+  if( entryNum == NUM_ENTRIES ) {
+    displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_FULL);
+    return;
+  } 
+  else {
+
+    memset(&entry, 0, sizeof(entry));
+    char buf[16];
+    
+    getStringFromFlash(buf, (uint8_t*)&ACCOUNT_TITLE_INPUT);
+    getStringFromUser(entry.title, ACCOUNT_TITLE_LENGTH, buf, '!', '~' );
+
+    getStringFromFlash(buf, (uint8_t*)&ACCOUNT_LOGIN_INPUT);
+    getStringFromUser(entry.data, ACCOUNT_LOGIN_LENGTH, buf, '!', '~' );
+
+    getStringFromFlash(buf, (uint8_t*)&PASSWORD_LENGTH_INPUT);
+    getStringFromUser(len_string, 2, buf, '0', '9' );
+
+    entry.passwordOffset = strlen(entry.data)+1;  
+    len = atoi(len_string); 
+    //putRandomChars( ((entry.data)+entry.passwordOffset),len);
+    strcpy((entry.data)+entry.passwordOffset, "password");
+
+    display.clearDisplay();    
+    display.setCursor(0,CURSOR_Y_FIRST_LINE);
+    display.print(entry.title);
+    display.setCursor(0,CURSOR_Y_SECOND_LINE);
+    display.print(entry.data);
+    display.setCursor(0,CURSOR_Y_THIRD_LINE);
+    for (int i=0; i < len; i++) {
+      char * c = (char*)(entry.data+entry.passwordOffset+i);
+      display.print(*c);
+    }
+    display.display();
+   
+    ES.putEntry( (uint8_t)entryNum, &entry );
+     
+    delay(4000); 
+   
+    //Serial.print("Stack Now: ");  Serial.println((RAMEND - SP), DEC);
+
+    int x = StackMarginWaterMark();
+    Serial.print("Watermark : "); Serial.println(x);
+  } 
+}
 ////////////////////
 // MISC
 ////////////////////
@@ -314,7 +506,7 @@ void __attribute__ ((noinline)) format()
     }
     
     if(fail) {
-      printCenteredStoredString((uint8_t*)&NEW_CODE_MISMATCH);
+      displayCenteredMessageFromStoredString((uint8_t*)&NEW_CODE_MISMATCH);
     }      
   }
   fail=1;
@@ -322,7 +514,7 @@ void __attribute__ ((noinline)) format()
   while(fail)
   {
     getStringFromFlash(buf, (uint8_t*)&NAME_INPUT);
-    if( getStringFromUser(user, USERNAME_LENGTH, buf, '!', '~' ) )
+    if( getStringFromUser(user, DEVICENAME_LENGTH, buf, '!', '~' ) )
     {
       fail=0;
     }
@@ -345,10 +537,10 @@ bool __attribute__ ((noinline)) login()
   
   if(ES.unlock((byte*)key)) {
      ret=1;
-     printCenteredStoredString((uint8_t*)&LOGIN_GRANTED);
+     displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_GRANTED);
       delay(1000);
   } else {
-     printCenteredStoredString((uint8_t*)&LOGIN_DENIED);
+     displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_DENIED);
       delay(1000);
   }
     
@@ -360,14 +552,23 @@ bool __attribute__ ((noinline)) login()
 ////////////////////
 void setup()   {  
 
+  // Initialize stack canary
+  paintStack();
+    
   char devName[32];
   memset(devName,0,32);
   
   // RN42 is configured by default to use 115200 bauds on UART links
   //Serial.begin(115200);
   Serial.begin(9600);
-
+        
   printSRAMMap();
+
+  int x = StackMarginWaterMark();
+  Serial.print("initial Watermark : "); Serial.println(x);
+
+  //Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);
+ 
   Entropy.initialize();
   setRng();
   
@@ -384,7 +585,7 @@ void setup()   {
   // Setup the pin used for knob management
   pinMode(knobSwitchPin, INPUT_PULLUP);
 
-//  knobIncrementChanged=false;
+//knobIncrementChanged=false;
   knobIndexIncreased=false;
   knobIndexDecreased=false;
   knobSwitchPushed=false;
@@ -393,14 +594,14 @@ void setup()   {
   //messUpEEPROMFormat();
 
   if(!ES.readHeader(devName)) {
-    printCenteredStoredString((uint8_t*)&NEED_FORMAT);
+    displayCenteredMessageFromStoredString((uint8_t*)&NEED_FORMAT);
     delay(1000);
     format();
   } else {
     char buf[48];
     sprintf(buf, "BLUEKEY(%d)", devName);
-    printCentered(buf);
-    delay(1000);
+    displayCenteredMessage(buf);
+    delay(500);
   }
   
   // Login now
@@ -417,27 +618,33 @@ void setup()   {
 static long loopidx=0;
 void loop() {
 
-  char tmp[6];
-  char invite[32];
-  getStringFromFlash(invite, (uint8_t*)&WHATEVER_INVITE);    
-  getStringFromUser(tmp, 5, invite,'!', '~');
+  int selection = main_menu();
 
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.print("GOT=");
-  display.print(tmp);
-  display.display();
-
-  while(1) {
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.print(F("LOOP!"));
-    display.print(loopidx);
-    display.display();
-    loopidx++;
-    Serial.print('.');
-    if (loopidx % 25 == 0)
-      Serial.println("");
-    delay(1000);
-  }
+  switch (selection) {
+    case 0:
+      // GET_PWD
+      break;
+    case 1:
+      // SET_PWD     
+      //int set_pwd_selection = menu_set_pwd();
+          
+      switch (menu_set_pwd()) {
+        case 0:
+          // GENERATE
+          generatePassword();
+          break;
+        case 1:
+          // MANUALLY           
+          break;
+      }
+      break;
+    case 2:
+      // CLEAR_PWD
+      break;
+    case 3:
+      // FORMAT
+      format();
+      break;
+  }  
 }
+

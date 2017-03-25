@@ -28,15 +28,6 @@
 #define HEADER_EEPROM_IDENTIFIER_LEN 12
 const static char eepromIdentifierTxt[HEADER_EEPROM_IDENTIFIER_LEN] PROGMEM  =  "[FinalKey2]";
 
-#define HEADER_SIZE 256
-//We reserve 1024 bytes for a rainy day
-#define EEPROM_ENTRY_START_ADDR 1280
-#define ENTRY_SIZE 224
-#define EEPROM_ENTRY_DISTANCE 240 //EntrySize + 16 for iv
-#define ENTRY_FULL_CBC_BLOCKS 14 //Blocksize / 16 for encryption
-#define ENTRY_NAME_CBC_BLOCKS 2 //Blocksize of decryption of title
-#define NUM_ENTRIES 32
-
 #define FALSE 0
 #define TRUE 1
 
@@ -84,9 +75,6 @@ void __attribute__ ((noinline)) EncryptedStorage::setBanner(char* banner)
 {
   I2E_Write( HEADER_EEPROM_IDENTIFIER_LEN,(byte*)banner, 32 );
 }
-
-
-
 
 bool __attribute__ ((noinline)) EncryptedStorage::unlock( byte* k )
 {
@@ -202,6 +190,7 @@ void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, en
   uint16_t offset = entryOffset(entryNum);
   //Create IV
   byte iv[16];
+
   putIv(iv);
   
   //Write IV
@@ -209,18 +198,17 @@ void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, en
   
   //Encrypt entry
   aes.cbc_encrypt((byte*)entry,(byte*)entry, ENTRY_FULL_CBC_BLOCKS, iv);
-  
+
   //Write entry
   I2E_Write( offset,(byte*)entry,  ENTRY_SIZE );
 }
 
-
 void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
 {
-  /*
+  
   uint16_t offset = entryOffset(entryNum);
   entry_t dat;
-  entry_t dat2;
+  //entry_t dat2;
   
   memset(&dat,0,16); //Zero out first 16 bytes of entry so we can write an all zero iv.  
   //Write an all zero iv to indicate it's empty
@@ -236,16 +224,15 @@ void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
   //Write random data
   I2E_Write( offset, (byte*)&dat, ENTRY_SIZE );
   //Read it back
-  I2E_Read( offset, (byte*)&dat2, ENTRY_SIZE );
+  //I2E_Read( offset, (byte*)&dat2, ENTRY_SIZE );
   
   //Compare, to see that we read what we wrote
-  if( memcmp( &dat, &dat2, ENTRY_SIZE ) !=  0 )
-  {
-     strcpy( dat.title, "[Bad]" );
-     dat.passwordOffset=0;
-     putEntry( entryNum, &dat );
-  }
-  */
+  //if( memcmp( &dat, &dat2, ENTRY_SIZE ) !=  0 )
+  //{
+   //  strcpy( dat.title, "[Bad]" );
+  //   dat.passwordOffset=0;
+  //   putEntry( entryNum, &dat );
+  //}  
 }
 
 void __attribute__ ((noinline)) EncryptedStorage::changePass( byte* newPass, byte* oldPass )
@@ -259,8 +246,7 @@ void __attribute__ ((noinline)) EncryptedStorage::changePass( byte* newPass, byt
   putPass(newPass);
 
   // For each non-empty entry
-//  debugPrint((char*)F("Encrypting..."));
-  for(uint16_t i = 0; i < 256; i++ )
+  for(uint16_t i = 0; i < NUM_ENTRIES; i++ )
   {
    //Serial.write('\r');txt(i);Serial.write('/');txt(255);
     if( getTitle( (uint8_t)i, (char*)obck ) )
@@ -276,7 +262,6 @@ void __attribute__ ((noinline)) EncryptedStorage::changePass( byte* newPass, byt
 
       //Write entry
       putEntry( (uint8_t)i, &entry );
-
     }
   }
 
@@ -296,7 +281,7 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
     char tmp[24];
     delEntry((uint8_t)i);
     sprintf(tmp, "Formatting: %d/%d", i+1, NUM_ENTRIES);
-    printCentered(tmp);    
+    displayCenteredMessage(tmp);    
   }
 
   //printHexBuff(pass, "UserPass", 32);
@@ -474,7 +459,7 @@ uint16_t __attribute__ ((noinline)) EncryptedStorage::getNextEmpty()
   uint16_t idx;
   uint8_t taken;
 
-  for(idx=0; idx < 256; idx++)
+  for(idx=0; idx < NUM_ENTRIES; idx++)
   {
     //Read iv
     getIVandStartAddressForEntry(idx, iv);

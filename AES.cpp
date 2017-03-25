@@ -1,4 +1,5 @@
 #include "AES.h"
+#include <TermTool.h>
 
 /*
  ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ static byte is_box (byte x)
 /* copying and xoring utilities */
 
 void AES::copy_n_bytes (byte * d, byte * s, byte nn)
-{
+{    
   while (nn >= 4)
     {
       *d++ = *s++ ;  // some unrolling
@@ -134,19 +135,19 @@ void AES::copy_n_bytes (byte * d, byte * s, byte nn)
     *d++ = *s++ ;
 }
 
-void xor_block (byte * d, byte * s)
-{
+void __attribute__ ((noinline)) xor_block (byte * d, byte * s)
+{ 
   for (byte i = 0 ; i < N_BLOCK ; i += 4)
     {
       *d++ ^= *s++ ;  // some unrolling
       *d++ ^= *s++ ;
       *d++ ^= *s++ ;
-      *d++ ^= *s++ ;
+      *d++ ^= *s++ ;         
     }
 }
 
-static void copy_and_key (byte * d, byte * s, byte * k)
-{
+static void __attribute__ ((noinline)) copy_and_key (byte * d, byte * s, byte * k)
+{ 
   for (byte i = 0 ; i < N_BLOCK ; i += 4)
     {
       *d++ = *s++ ^ *k++ ;  // some unrolling
@@ -160,7 +161,7 @@ static void copy_and_key (byte * d, byte * s, byte * k)
 
 /* SUB ROW PHASE */
 
-static void shift_sub_rows (byte st [N_BLOCK])
+static void __attribute__ ((noinline)) shift_sub_rows (byte st [N_BLOCK])
 {
   st [0] = s_box (st [0]) ; st [4]  = s_box (st [4]) ;
   st [8] = s_box (st [8]) ; st [12] = s_box (st [12]) ;
@@ -177,7 +178,7 @@ static void shift_sub_rows (byte st [N_BLOCK])
   st [7]  = s_box (st [3]) ;  st [3]  = s_box (tt) ;
 }
 
-static void inv_shift_sub_rows (byte st[N_BLOCK])
+static void __attribute__ ((noinline)) inv_shift_sub_rows (byte st[N_BLOCK])
 {
   st [0] = is_box (st[0]) ; st [4] = is_box (st [4]);
   st [8] = is_box (st[8]) ; st [12] = is_box (st [12]);
@@ -196,11 +197,12 @@ static void inv_shift_sub_rows (byte st[N_BLOCK])
 
 /* SUB COLUMNS PHASE */
 
-static void mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
+static void __attribute__ ((noinline)) mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
 {
   byte j = 5 ;
   byte k = 10 ;
   byte l = 15 ;
+
   for (byte i = 0 ; i < N_BLOCK ; i += N_COL)
     {
       byte a = st [i] ;
@@ -216,7 +218,7 @@ static void mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
     }
 }
 
-static void inv_mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
+static void __attribute__ ((noinline)) inv_mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
 {
   for (byte i = 0 ; i < N_BLOCK ; i += N_COL)
     {
@@ -239,7 +241,7 @@ static void inv_mix_sub_columns (byte dt[N_BLOCK], byte st[N_BLOCK])
 
 /*  Set the cipher key for the pre-keyed version */
 
-byte AES::set_key (byte key [], int keylen)
+byte __attribute__ ((noinline)) AES::set_key (byte key [], int keylen)
 {
   byte hi ;
   switch (keylen)
@@ -294,7 +296,7 @@ byte AES::set_key (byte key [], int keylen)
 }
 
 // clean up subkeys after use.
-void AES::clean ()
+void __attribute__ ((noinline)) AES::clean ()
 {
   for (byte i = 0 ; i < KEY_SCHEDULE_BYTES ; i++)
     key_sched [i] = 0 ;
@@ -303,8 +305,8 @@ void AES::clean ()
 
 /*  Encrypt a single block of 16 bytes */
 
-byte AES::encrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
-{
+byte __attribute__ ((noinline)) AES::encrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
+{  
   if (round)
     {
       byte s1 [N_BLOCK], r ;
@@ -325,24 +327,27 @@ byte AES::encrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
 }
 
 /* CBC encrypt a number of blocks (input and return an IV) */
-
-byte AES::cbc_encrypt (byte * plain, byte * cipher, int n_block, byte iv [N_BLOCK])
-{
-  while (n_block--)
+byte __attribute__ ((noinline)) AES::cbc_encrypt (byte * plain, byte * cipher, int n_block, byte iv [N_BLOCK])
+{   
+    while (n_block--)
     {
       xor_block (iv, plain) ;
+      
       if (encrypt (iv, iv) != SUCCESS)
         return FAILURE ;
+        
       copy_n_bytes (cipher, iv, N_BLOCK) ;
       plain  += N_BLOCK ;
       cipher += N_BLOCK ;
+      
     }
+        
   return SUCCESS ;
 }
 
 /*  Decrypt a single block of 16 bytes */
 
-byte AES::decrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
+byte __attribute__ ((noinline)) AES::decrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
 {
   if (round)
     {
@@ -365,7 +370,7 @@ byte AES::decrypt (byte plain [N_BLOCK], byte cipher [N_BLOCK])
 
 /* CBC decrypt a number of blocks (input and return an IV) */
 
-byte AES::cbc_decrypt (byte * cipher, byte * plain, int n_block, byte iv [N_BLOCK])
+byte __attribute__ ((noinline)) AES::cbc_decrypt (byte * cipher, byte * plain, int n_block, byte iv [N_BLOCK])
 {   
   while (n_block--)
     {

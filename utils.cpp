@@ -3,29 +3,33 @@
 #include "display.h"
 #include "constants.h"
 
-void __attribute__ ((noinline)) printCentered(char* msg) {  
+void __attribute__ ((noinline)) displayMessage(char* msg, int X, int Y) {  
+
+    display.clearDisplay();    
+    display.setCursor(X,Y);
+    display.print(msg);
+    display.display(); 
+
+    delay(1000);
+}
+
+void __attribute__ ((noinline)) displayCenteredMessage(char* msg) {  
     int cursorX;
     int cursorY;
   
     cursorX = (DISPLAY_WIDTH - (strlen(msg))*CHAR_XSIZE)/2;
     cursorY = (DISPLAY_HEIGHT - CHAR_YSIZE)/2;
 
-    display.clearDisplay();    
-    display.setCursor(cursorX,cursorY);
-    display.print(msg);
-    cursorX = display.getCursorX();
-    display.display(); 
-
-    delay(1000);
+    displayMessage(msg, cursorX, cursorY);
 }
 
-void __attribute__ ((noinline)) printCenteredStoredString(uint8_t* storedString) {
+void __attribute__ ((noinline)) displayCenteredMessageFromStoredString(uint8_t* storedString) {
     char msgBuffer[32];
     getStringFromFlash(msgBuffer, storedString);
-    printCentered(msgBuffer);
+    displayCenteredMessage(msgBuffer);
 }
 
-byte getStringFromFlash(char* buffer, uint8_t* storedString) {
+byte __attribute__ ((noinline)) getStringFromFlash(char* buffer, uint8_t* storedString) {
 
     uint8_t* ptr = storedString;
     byte msgLen=0;
@@ -86,6 +90,27 @@ void printHexBuff(byte* buff, char* name, int len) {
     }
 }
 
+#define STACK_CANARY_VAL 0xfd
+extern uint8_t  __stack;
+extern char *__bss_end;
+
+void paintStack() {
+  uint8_t *p = (uint8_t *)&__bss_end;
+  while(p <= SP) *p++ = STACK_CANARY_VAL;
+}
+ 
+uint16_t StackMarginWaterMark(void) {
+    const uint8_t *p = (uint8_t *)&__bss_end;
+    uint16_t c = 0;
+     
+    //while(*p ==STACK_CANARY_VAL && p <= (uint8_t *)&__stack) {
+    while(*p ==STACK_CANARY_VAL && p <= SP) {
+        p++;
+        c++;
+    }
+    return c;
+}
+
 void printSRAMMap() {
     int dummy;
     int free_ram; 
@@ -102,7 +127,7 @@ void printSRAMMap() {
     int stack=&__stack; 
     free_ram =  (int) &dummy - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
   
-    Serial.print("\n%Memory map:");
+    Serial.print("\nMemory map:");
 
     Serial.print("\n  __data_start=");
     Serial.print((int)&__data_start); 
@@ -135,7 +160,20 @@ void printSRAMMap() {
     Serial.print((int)&__stack);  
         
     Serial.print("\n, RAMEND=");
-    Serial.print(RAMEND);
+    Serial.println(RAMEND);
+
+/*
+  uint8_t *p = (uint8_t *)&__bss_end;
+   
+  while(p <= RAMEND) {
+    Serial.print("@");
+    Serial.print((int)p);
+    Serial.print(": 0x");
+    Serial.println(*p++, HEX);
+  }
+
+*/
+    
 }
 
 void I2Cscan() {
