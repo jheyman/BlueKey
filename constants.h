@@ -31,10 +31,13 @@
 #define CODE_HIDE_CHAR '*'
 #define PIVOT_CHAR_INDEX 10
 
-#define USERCODE_LENGTH 6
+#define USERCODE_LENGTH 6 
+#define USERCODE_BUFF_LEN 32 // must be = EEPROM_PASS_CIPHER_LENGTH since ES.format modifies buffer content
+#define DEVICENAME_LENGTH 12 
+#define DEVNAME_BUFF_LEN 32 // must be = EEPROM_DEVICENAME_LENGTH since ES.format modifies buffer content
+
 #define ACCOUNT_TITLE_LENGTH 12
 #define ACCOUNT_LOGIN_LENGTH 12
-#define DEVICENAME_LENGTH 9
 
 #endif
 

@@ -23,28 +23,16 @@
 
 //Each entry is 16 bytes for iv, followed by encrypted struct of  bytes 
 //Struct must be %16 == 0
+
+#define ENTRY_TITLE_SIZE 32
+
 typedef struct {
-  char title[32]; // Title needs to be two blocks for seperate decryption
+  char title[ENTRY_TITLE_SIZE]; // Title needs to be two blocks for seperate decryption
   uint8_t seperator;		//Character to type between user and pass (ignored when macro)
   uint8_t passwordOffset;	//Where the password starts in the string of data (0 = macro)
   //char data[190];
   char data[78];
 } entry_t;
-
-#define HEADER_SIZE 256
-//We reserve 1024 bytes for a rainy day
-#define EEPROM_ENTRY_START_ADDR 1280
-
-//#define ENTRY_SIZE 224
-#define ENTRY_SIZE 112
-
-//#define EEPROM_ENTRY_DISTANCE 240 //EntrySize + 16 for iv
-#define EEPROM_ENTRY_DISTANCE 128 //EntrySize + 16 for iv
-
-//#define ENTRY_FULL_CBC_BLOCKS 14 //Blocksize / 16 for encryption
-#define ENTRY_FULL_CBC_BLOCKS 7//Blocksize / 16 for encryption
-
-#define ENTRY_NAME_CBC_BLOCKS 2 //Blocksize of decryption of title
 
 #define NUM_ENTRIES 16
 
@@ -62,8 +50,8 @@ public:
   void delEntry ( uint8_t entryNum ); //Deletes an entry
   void format( byte* pass, char* name ); //A 32 byte key and a 32 byte name
   void setBanner(char* banner);
-  void exportData();
-  void importData();
+  //void exportData();
+  //void importData();
   uint16_t getNextEmpty();
   void setKeyboardLayout(uint8_t lang);
   uint8_t getKeyboardLayout();

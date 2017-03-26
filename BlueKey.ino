@@ -22,6 +22,7 @@ const static char DEVICE_FULL[] PROGMEM = "Error: device full";
 const static char ACCOUNT_TITLE_INPUT[] PROGMEM = "Account? ";
 const static char ACCOUNT_LOGIN_INPUT[] PROGMEM = "Login? ";
 const static char PASSWORD_LENGTH_INPUT[] PROGMEM = "Pwd length? ";
+const static char STORING_NEW_PASSWORD[] PROGMEM = "Storing...";
 
 // Rules:
 // max 21 characters per line, minus left triangle cursor and one space => max 19 chars max per line, including starting and trailing space
@@ -118,7 +119,7 @@ void __attribute__ ((noinline)) getCodeFromUser(char* dst, const uint8_t numChar
     }
       
     display.display();
-            
+           
     // Require numChars input characters from user
     while (1) {
 
@@ -444,29 +445,36 @@ void __attribute__ ((noinline)) generatePassword() {
 
     entry.passwordOffset = strlen(entry.data)+1;  
     len = atoi(len_string); 
-    //putRandomChars( ((entry.data)+entry.passwordOffset),len);
-    strcpy((entry.data)+entry.passwordOffset, "password");
+    putRandomChars( ((entry.data)+entry.passwordOffset),len);
+    //strcpy((entry.data)+entry.passwordOffset, "password");
 
     display.clearDisplay();    
+
+    displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD);
+
+    /*
     display.setCursor(0,CURSOR_Y_FIRST_LINE);
-    display.print(entry.title);
+    getStringFromFlash(buf, (uint8_t*)&STORING_NEW_PASSWORD);
+    display.print(buf);
+    
     display.setCursor(0,CURSOR_Y_SECOND_LINE);
+    display.print(entry.title);
+
+    display.setCursor(0,CURSOR_Y_THIRD_LINE);      
     display.print(entry.data);
-    display.setCursor(0,CURSOR_Y_THIRD_LINE);
+
+    display.setCursor(0,CURSOR_Y_FOURTH_LINE);    
     for (int i=0; i < len; i++) {
       char * c = (char*)(entry.data+entry.passwordOffset+i);
       display.print(*c);
     }
-    display.display();
-   
-    ES.putEntry( (uint8_t)entryNum, &entry );
-     
-    delay(4000); 
-   
-    //Serial.print("Stack Now: ");  Serial.println((RAMEND - SP), DEC);
 
-    int x = StackMarginWaterMark();
-    Serial.print("Watermark : "); Serial.println(x);
+    display.display();
+    */
+   
+    ES.putEntry( (uint8_t)entryNum, &entry );   
+  
+    //Serial.print("Stack Now: ");  Serial.println((RAMEND - SP), DEC);
   } 
 }
 ////////////////////
@@ -484,13 +492,14 @@ void setRng()
 /////////////////////
 void __attribute__ ((noinline)) format()
 {
-  char code1[32];
-  char code2[32];
-  char user[33];
+  char code1[USERCODE_BUFF_LEN];
+  char code2[USERCODE_BUFF_LEN];
+  
+  char user[DEVICENAME_LENGTH+1];  
   char buf[32];
   bool fail=1;
 
-  memset( code1, 0, 32 );
+  memset( code1, 0, USERCODE_BUFF_LEN);
 
   while(fail)
   {
@@ -527,23 +536,23 @@ void __attribute__ ((noinline)) format()
 /////////
 bool __attribute__ ((noinline)) login()
 {
-  char key[33];
+  char key[USERCODE_BUFF_LEN+1];
   char buf[32];
-  memset(key,0,33);
+  memset(key,0,USERCODE_BUFF_LEN+1);
   uint8_t ret=0;
 
   getStringFromFlash(buf, (uint8_t*)&CODE_INVITE);
-  getCodeFromUser(key, 6, buf, '0', '9');
-  
+  getCodeFromUser(key, USERCODE_LENGTH, buf, '0', '9');
+   
   if(ES.unlock((byte*)key)) {
      ret=1;
      displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_GRANTED);
-      delay(1000);
+      delay(500);
   } else {
      displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_DENIED);
-      delay(1000);
+      delay(500);
   }
-    
+
   return ret;
 }
 
@@ -555,14 +564,14 @@ void setup()   {
   // Initialize stack canary
   paintStack();
     
-  char devName[32];
-  memset(devName,0,32);
+  char devName[DEVNAME_BUFF_LEN];
+  memset(devName,0,DEVNAME_BUFF_LEN);
   
   // RN42 is configured by default to use 115200 bauds on UART links
   //Serial.begin(115200);
   Serial.begin(9600);
         
-  printSRAMMap();
+  //printSRAMMap();
 
   int x = StackMarginWaterMark();
   Serial.print("initial Watermark : "); Serial.println(x);
@@ -599,7 +608,7 @@ void setup()   {
     format();
   } else {
     char buf[48];
-    sprintf(buf, "BLUEKEY(%d)", devName);
+    sprintf(buf, "BLUEKEY (%s)", devName);
     displayCenteredMessage(buf);
     delay(500);
   }
@@ -609,7 +618,6 @@ void setup()   {
   do {
     login_status = login();
   } while (login_status==false);
-  
 }
 
 ////////////////////
@@ -645,6 +653,9 @@ void loop() {
       // FORMAT
       format();
       break;
-  }  
+  }
+  
+  int x = StackMarginWaterMark();
+  Serial.print("Watermark after main loop action: "); Serial.println(x);  
 }
 
