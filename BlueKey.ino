@@ -7,12 +7,15 @@
 #include "display.h"
 #include "utils.h"
 
+// max 21 characters per line
 const static char NEW_CODE_INVITE[] PROGMEM = "NEW CODE? ";
 const static char REPEAT_CODE_INVITE[] PROGMEM = "REPEAT? ";
 const static char NAME_INPUT[] PROGMEM = "NAME? ";
 const static char CODE_INVITE[] PROGMEM = "CODE:";
 const static char WHATEVER_INVITE[] PROGMEM = "TEST:";
 const static char NEW_CODE_MISMATCH[] PROGMEM = "ERROR: mismatch";
+const static char INVALID_VALUE[] PROGMEM = "ERROR: invalid value";
+const static char DEVICE_EMPTY[] PROGMEM = "Device is empty";
 const static char NEED_FORMAT[] PROGMEM = "Format needed";
 const static char LOGIN_GRANTED[] PROGMEM = "OK";
 const static char LOGIN_DENIED[] PROGMEM = "DENIED";
@@ -21,7 +24,8 @@ const static char DEVICE_FULL[] PROGMEM = "Error: device full";
 
 const static char ACCOUNT_TITLE_INPUT[] PROGMEM = "Account? ";
 const static char ACCOUNT_LOGIN_INPUT[] PROGMEM = "Login? ";
-const static char PASSWORD_LENGTH_INPUT[] PROGMEM = "Pwd length? ";
+const static char PASSWORD_LENGTH_INPUT[] PROGMEM = "Length? [0-16] ";
+const static char PASSWORD_VALUE_INPUT[] PROGMEM = "Pwd? ";
 const static char STORING_NEW_PASSWORD[] PROGMEM = "Storing...";
 
 // Rules:
@@ -97,6 +101,64 @@ bool checkbuttonPushed() {
   lastButtonState = reading;
   return ret;
 }
+
+bool __attribute__ ((noinline)) confirmChoice(char* text)
+{
+    int cursorX = (DISPLAY_WIDTH - strlen(text)*CHAR_XSIZE)/2;
+
+    int nbCharsValidated = 0;
+    bool confirmed=false;
+    bool needRefresh = true;
+    char c = CODE_SLOT_CHAR;
+
+    display.clearDisplay();    
+    display.setCursor(cursorX,CURSOR_Y_FIRST_LINE);
+    display.print(text);     
+    display.display();
+           
+    // Require numChars input characters from user
+    while (1) {
+
+      // If knob switch was pushed, validate current char
+      if (checkbuttonPushed()) {
+        return confirmed;
+      } 
+      else if (knobIndexIncreased) {
+        knobIndexIncreased = false;
+        confirmed = !confirmed;
+        needRefresh = true;
+      }
+      else if (knobIndexDecreased) {
+        knobIndexDecreased = false;
+        confirmed = !confirmed;
+        needRefresh = true;
+      }
+
+      if (needRefresh) {
+          needRefresh = false;
+
+          display.setCursor((DISPLAY_WIDTH - strlen("Yes No")*CHAR_XSIZE)/2,CURSOR_Y_THIRD_LINE);
+
+          if (confirmed) {
+            display.setTextColor(BLACK, WHITE);
+            display.print("Yes");     
+            display.setTextColor(WHITE, BLACK);
+            display.print(" ");
+            display.print("No");  
+          } else {
+            display.print("Yes");  
+            display.print(" ");
+            display.setTextColor(BLACK, WHITE);
+            display.print("No");     
+            display.setTextColor(WHITE, BLACK);
+          }
+          display.display();
+       }
+
+      delay(10);  
+    }
+}
+
 
 void __attribute__ ((noinline)) getCodeFromUser(char* dst, const uint8_t numChars, const char *invite, int firstAsciiChar, int lastAsciiChar)
 {
@@ -341,7 +403,7 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
     }
   
    if (needRefresh) {
-    needRefresh = false;
+      needRefresh = false;
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
 
@@ -359,11 +421,11 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
           if (i==display_line_index) {
             display.print((char)16);
             display.print(' ');
-            display.print(menuEntryText);
           } else {
             display.print("  ");
-            display.print(menuEntryText);
           }  
+
+          display.print(menuEntryText);
         
           display.display();
           y+= CHAR_YSIZE;
@@ -440,11 +502,18 @@ void __attribute__ ((noinline)) generatePassword() {
     getStringFromFlash(buf, (uint8_t*)&ACCOUNT_LOGIN_INPUT);
     getStringFromUser(entry.data, ACCOUNT_LOGIN_LENGTH, buf, '!', '~' );
 
-    getStringFromFlash(buf, (uint8_t*)&PASSWORD_LENGTH_INPUT);
-    getStringFromUser(len_string, 2, buf, '0', '9' );
+    do {
+      getStringFromFlash(buf, (uint8_t*)&PASSWORD_LENGTH_INPUT);
+      getStringFromUser(len_string, 2, buf, '0', '9' );
+  
+      entry.passwordOffset = strlen(entry.data)+1;  
+      len = atoi(len_string);
 
-    entry.passwordOffset = strlen(entry.data)+1;  
-    len = atoi(len_string); 
+      if (len > PASSWORD_MAX_LENGTH){
+            displayCenteredMessageFromStoredString((uint8_t*)&INVALID_VALUE);
+      }
+    } while(len > PASSWORD_MAX_LENGTH);
+    
     putRandomChars( ((entry.data)+entry.passwordOffset),len);
     //strcpy((entry.data)+entry.passwordOffset, "password");
 
@@ -472,10 +541,177 @@ void __attribute__ ((noinline)) generatePassword() {
     display.display();
     */
    
-    ES.putEntry( (uint8_t)entryNum, &entry );   
-  
-    //Serial.print("Stack Now: ");  Serial.println((RAMEND - SP), DEC);
+    ES.putEntry( (uint8_t)entryNum, &entry );
   } 
+}
+
+void __attribute__ ((noinline)) inputPassword() {
+  uint16_t entryNum = ES.getNextEmpty();
+  entry_t entry;
+  char len_string[3];
+  int len;
+
+  if( entryNum == NUM_ENTRIES ) {
+    displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_FULL);
+    return;
+  } 
+  else {
+
+    memset(&entry, 0, sizeof(entry));
+    char buf[16];
+    
+    getStringFromFlash(buf, (uint8_t*)&ACCOUNT_TITLE_INPUT);
+    getStringFromUser(entry.title, ACCOUNT_TITLE_LENGTH, buf, '!', '~' );
+
+    getStringFromFlash(buf, (uint8_t*)&ACCOUNT_LOGIN_INPUT);
+    getStringFromUser(entry.data, ACCOUNT_LOGIN_LENGTH, buf, '!', '~' );
+   
+    getStringFromFlash(buf, (uint8_t*)&PASSWORD_VALUE_INPUT);
+    getStringFromUser((entry.data)+entry.passwordOffset, PASSWORD_MAX_LENGTH, buf, '!', '~' );    
+
+    display.clearDisplay();    
+
+    displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD);
+
+    /*
+    display.setCursor(0,CURSOR_Y_FIRST_LINE);
+    getStringFromFlash(buf, (uint8_t*)&STORING_NEW_PASSWORD);
+    display.print(buf);
+    
+    display.setCursor(0,CURSOR_Y_SECOND_LINE);
+    display.print(entry.title);
+
+    display.setCursor(0,CURSOR_Y_THIRD_LINE);      
+    display.print(entry.data);
+
+    display.setCursor(0,CURSOR_Y_FOURTH_LINE);    
+    for (int i=0; i < len; i++) {
+      char * c = (char*)(entry.data+entry.passwordOffset+i);
+      display.print(*c);
+    }
+
+    display.display();
+    */
+   
+    ES.putEntry( (uint8_t)entryNum, &entry );   
+  } 
+}
+
+int __attribute__ ((noinline)) pickEntry() {
+
+  char eName[32];
+  uint8_t entryNum=0;
+  uint8_t nbEntries;
+  uint8_t maxEntryLength=0;
+  bool hasEntry=false;
+ 
+  do
+  {
+    hasEntry = ES.getTitle(entryNum, eName);
+    if(hasEntry)
+    {
+      Serial.print("Entry "); 
+      Serial.print(entryNum);
+      Serial.print(": "); 
+      Serial.println(eName); 
+      int len = strlen(eName);
+      if (len>maxEntryLength) maxEntryLength = len;
+      entryNum++;
+    }
+  } while (hasEntry);
+
+  nbEntries = entryNum;
+  //Serial.print("nbEntries=");Serial.println(nbEntries);
+
+  if(nbEntries==0) return -1;
+
+  byte selected_index = 0;
+  byte display_line_index = 0;
+  char menuEntryText[32];
+  bool needRefresh = true;
+
+  display.clearDisplay();
+ 
+  while (1) {
+  
+    // If knob switch was pushed, return currently selected entry
+    if (checkbuttonPushed()) {
+        if (nbEntries > SCREEN_MAX_NB_LINES) {
+          return (mod(selected_index+display_line_index, nbEntries));
+        } else {
+          return selected_index;
+        }
+    } 
+    else if (knobIndexIncreased) {
+      knobIndexIncreased = false;
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index+1,nbEntries);
+      } else {
+        if (selected_index<(nbEntries-1))
+          selected_index++;
+      }
+      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
+        display_line_index++;
+      needRefresh = true;      
+    }
+    else if (knobIndexDecreased) {
+      knobIndexDecreased = false;
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index-1,nbEntries);
+      } else {
+        if (selected_index>0)
+          selected_index--;
+      }
+      if (display_line_index>0)
+        display_line_index--;
+      needRefresh = true; 
+    }
+  
+   if (needRefresh) {
+    needRefresh = false;
+      int y = 0;
+      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
+
+        if (i>= nbEntries) {
+          break;
+        } else {
+
+          if (nbEntries > SCREEN_MAX_NB_LINES) {
+            entryNum = mod(selected_index+i,nbEntries);
+            //getStringFromFlash(menuEntryText, menutexts[mod(selected_index+i,nbEntries)]);
+          } else {
+            entryNum = i;
+            //getStringFromFlash(menuEntryText, menutexts[i]);
+          }
+
+          ES.getTitle(entryNum, menuEntryText);
+          int entryLen = strlen(menuEntryText);
+          display.setCursor(0,y);
+        
+          if (i==display_line_index) {
+            display.print((char)16);
+            display.print(' ');
+            display.print(menuEntryText);
+          } else {
+            display.print("  ");
+            display.print(menuEntryText);
+          }
+
+          if (entryLen<maxEntryLength) {
+             for (int k=0;k<maxEntryLength-entryLen;k++){
+               display.print(' ');
+             }
+           }
+        
+          display.display();
+          y+= CHAR_YSIZE;
+        }
+      }        
+   }
+     
+   delay(1);
+  }
+  
 }
 ////////////////////
 // MISC
@@ -626,11 +862,22 @@ void setup()   {
 static long loopidx=0;
 void loop() {
 
+  int entry_choice;
   int selection = main_menu();
+  entry_t temp;
 
   switch (selection) {
     case 0:
       // GET_PWD
+      entry_choice = pickEntry();
+      if (entry_choice != -1) {
+        Serial.print("picked entry:");
+        Serial.println(entry_choice);
+        ES.getEntry(entry_choice, &temp);
+        Serial.print("password for this entry:");
+        Serial.println(temp.data+temp.passwordOffset);
+      } else
+            displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
       break;
     case 1:
       // SET_PWD     
@@ -642,16 +889,19 @@ void loop() {
           generatePassword();
           break;
         case 1:
-          // MANUALLY           
+          // MANUALLY
+          inputPassword();         
           break;
       }
       break;
     case 2:
       // CLEAR_PWD
+      entry_choice = pickEntry();
+      if (confirmChoice("del entry?")) ES.delEntry(entry_choice);
       break;
     case 3:
       // FORMAT
-      format();
+      if (confirmChoice("Sure?")) format();
       break;
   }
   

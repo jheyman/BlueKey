@@ -36,6 +36,8 @@
 #define DEVICENAME_LENGTH 12 
 #define DEVNAME_BUFF_LEN 32 // must be = EEPROM_DEVICENAME_LENGTH since ES.format modifies buffer content
 
+#define PASSWORD_MAX_LENGTH 16
+
 #define ACCOUNT_TITLE_LENGTH 12
 #define ACCOUNT_LOGIN_LENGTH 12
 
