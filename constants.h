@@ -11,6 +11,27 @@
 #define knobDataPin 12
 #define knobSwitchPin 2
 
+#define UpButtonPin 3
+#define UpButtonIndex 0
+
+#define DownButtonPin 5
+#define DownButtonIndex 1
+
+#define LeftButtonPin 2
+#define LeftButtonIndex 2
+
+#define RightButtonPin 4
+#define RightButtonIndex 3
+
+#define YButtonPin 6
+#define YButtonIndex 4
+
+#define DEBOUNCE_TIME 10 //ms
+#define BUTTON_REPEAT_TIME_VERYSLOW 500 //ms
+#define BUTTON_REPEAT_TIME_SLOW 100 //ms
+#define BUTTON_REPEAT_TIME_FAST 0 //ms
+#define BUTTON_HOLD_TIME 300 //ms
+
 #define debounceDelay 50
 
 #define ledPin 13

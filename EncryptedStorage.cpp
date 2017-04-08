@@ -316,7 +316,7 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
   I2E_Write( EEPROM_IDENTIFIER_LOCATION, identifier, HEADER_EEPROM_IDENTIFIER_LEN );
   I2E_Write( EEPROM_DEVICENAME_LOCATION,(byte*)name, EEPROM_DEVICENAME_LENGTH );
 
-  Serial.print("device name written:"); Serial.println(name);
+  //Serial.print("device name written:"); Serial.println(name);
 }
 
 //Find used and all 0  IV's so we can avoid them (0 avoided because we use it for detecting empty entry)
