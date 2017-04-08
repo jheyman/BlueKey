@@ -237,11 +237,11 @@ void __attribute__ ((noinline)) getCodeFromUser(char* dst, const uint8_t numChar
 #define PIVOT_CHAR_INDEX 10
 
 
-char * UpperCaseLetters="ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
-char * LowerCaseLetters="abcdefghijklmnopqrstuvwxyz ";
-char * SpecialCharacters="&~#'@*$! ";
-char * Numbers="012345678 ";
-char * Done="[DONE] ";
+char * UpperCaseLetters="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+char * LowerCaseLetters="abcdefghijklmnopqrstuvwxyz";
+char * SpecialCharacters="&~#'@*$!";
+char * Numbers="012345678";
+char * Done="[DONE]";
 
 typedef struct {
   char* buffers[5]; 
@@ -255,8 +255,26 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
        
     int cursorX=0;
     int nbCharsValidated = 0;
-    char pivot_char = 0;
-    
+    byte select_index = PIVOT_CHAR_INDEX;
+    byte old_select_index = PIVOT_CHAR_INDEX;
+    byte select_index_max = 0;
+
+    byte bufferOffset = 0;
+    byte bufferOffsetMax = 0;
+
+    bool needLettersRefresh=true;
+    bool needSelectorRefresh=true;
+     
+    if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+      bufferOffsetMax = 0; 
+    else
+      bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
+
+    if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+      select_index_max = mlib.buffer_size[currentInputBufferLine] - 1; 
+    else
+      select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;
+
     display.clearDisplay();
     display.setCursor(cursorX,0);
     display.print(invite);
@@ -268,19 +286,16 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
     }
     
     // display the cursors pointing to the currently selected char
-    display.setCursor((PIVOT_CHAR_INDEX)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
+    display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
     display.print((char)31); // triangle pointing down
-    display.setCursor((PIVOT_CHAR_INDEX)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
+    display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
     display.print((char)30); // triangle pointing up
 
     // display rolling list of chars on third line
     display.setCursor(0,CURSOR_Y_THIRD_LINE);
 
-
     for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-      //char c = firstAsciiChar + mod(pivot_char + i - PIVOT_CHAR_INDEX, nbChars);
-      int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-      char c = mlib.buffers[currentInputBufferLine][index];
+      char c = mlib.buffers[currentInputBufferLine][bufferOffset+i];
       display.print(c);
     }
 
@@ -292,153 +307,127 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
 
       check_buttons(BUTTON_REPEAT_TIME_VERYSLOW);
 
-      // If knob switch was pushed, validate current char
+      // If validation was pushed, validate current char
       if (justpressed[YButtonIndex]) {
 
         if (currentInputBufferLine == mlib.nbBuffers - 1) 
           break;
           
         display.setCursor(cursorX,0);
-        //display.print(buffer[pivot_char]); 
-        display.print(mlib.buffers[currentInputBufferLine][pivot_char]);
+        display.print(mlib.buffers[currentInputBufferLine][bufferOffset + select_index]);
         display.display();        
         cursorX += CHAR_XSIZE;
           
-        dst[nbCharsValidated] = (mlib.buffers[currentInputBufferLine][pivot_char]);
+        dst[nbCharsValidated] = (mlib.buffers[currentInputBufferLine][bufferOffset + select_index]);
         
         nbCharsValidated++;
         if (nbCharsValidated == numChars)
           break;
       } 
       else if (justpressed[LeftButtonIndex]) {
-
-        pivot_char = mod(pivot_char+1,mlib.buffer_size[currentInputBufferLine]);
-        
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
-    
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-          //char c = buffer[index];
-          char c = mlib.buffers[currentInputBufferLine][index];
-          
-          //if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-           // display.setTextColor(BLACK, WHITE);
-          //  display.print(c);
-          //  display.setTextColor(WHITE, BLACK);
-         // } else  {
-            display.print(c);
-          //}    
-        }    
-        display.display();
+        if (select_index < select_index_max)
+        {
+          old_select_index = select_index;
+          select_index = select_index + 1;  
+          needSelectorRefresh=true;          
+        }        
       }
       else if (held[LeftButtonIndex]) {
-
-        pivot_char = mod(pivot_char+1,mlib.buffer_size[currentInputBufferLine]);
-        
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
-    
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-          //char c = buffer[index];
-          char c = mlib.buffers[currentInputBufferLine][index];
-          
-          //if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-           // display.setTextColor(BLACK, WHITE);
-          //  display.print(c);
-          //  display.setTextColor(WHITE, BLACK);
-         // } else  {
-            display.print(c);
-          //}    
-        }    
-        display.display();
+        if (select_index < select_index_max)
+        {
+          old_select_index = select_index;
+          select_index = select_index + 1;  
+          needSelectorRefresh=true;          
+        }        
       }      
       else if (justpressed[RightButtonIndex]) {
-
-        pivot_char = mod(pivot_char-1,mlib.buffer_size[currentInputBufferLine]);
-        
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
-    
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-          //char c = buffer[index];
-          char c = mlib.buffers[currentInputBufferLine][index];
-         /* 
-          if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-            display.setTextColor(BLACK, WHITE);
-            display.print(c);
-            display.setTextColor(WHITE, BLACK);
-          } else  {
-          */
-            display.print(c);
-          //}  
-        }  
-        
-        display.display();    
+        if (select_index > 0)
+        {
+          old_select_index = select_index;
+          select_index = select_index - 1;
+          needSelectorRefresh=true;          
+        }
       }
       else if (held[RightButtonIndex]) {
-
-        pivot_char = mod(pivot_char-1,mlib.buffer_size[currentInputBufferLine]);
-        
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
-    
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-          //char c = buffer[index];
-          char c = mlib.buffers[currentInputBufferLine][index];
-         /* 
-          if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-            display.setTextColor(BLACK, WHITE);
-            display.print(c);
-            display.setTextColor(WHITE, BLACK);
-          } else  {
-          */
-            display.print(c);
-          //}  
-        }  
-        
-        display.display();    
+        if (select_index > 0)
+        {
+          old_select_index = select_index;
+          select_index = select_index - 1;
+          needSelectorRefresh=true;          
+        }
       }      
       else if (justpressed[UpButtonIndex] ) {
-        currentInputBufferLine = mod(currentInputBufferLine+1,mlib.nbBuffers);
-     
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
+        old_select_index = select_index;
+        currentInputBufferLine = mod(currentInputBufferLine-1,mlib.nbBuffers);
+        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+          bufferOffsetMax = 0; 
+        else
+          bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
     
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-          //char c = buffer[index];
-          char c = mlib.buffers[currentInputBufferLine][index];
-         /* 
-          if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-            display.setTextColor(BLACK, WHITE);
-            display.print(c);
-            display.setTextColor(WHITE, BLACK);
-          } else  {
-          */
-            display.print(c);        
-        }
-        display.display();    
+        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+          select_index_max = mlib.buffer_size[currentInputBufferLine] - 1; 
+        else
+          select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;     
+
+        if (select_index > select_index_max) select_index = select_index_max;
+             
+        needLettersRefresh=true;
+        needSelectorRefresh=true;    
       }
       else if (justpressed[DownButtonIndex] ) {
-        currentInputBufferLine = mod(currentInputBufferLine-1,mlib.nbBuffers);
 
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
+        old_select_index = select_index;
+        currentInputBufferLine = mod(currentInputBufferLine+1,mlib.nbBuffers);
+        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+          bufferOffsetMax = 0; 
+        else
+          bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
     
+        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+          select_index_max = mlib.buffer_size[currentInputBufferLine] - 1; 
+        else
+          select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;
+
+        if (select_index > select_index_max) select_index = select_index_max;
+        
+        needLettersRefresh=true;
+        needSelectorRefresh=true;     
+      }
+
+      // Render updated screen
+      if (needLettersRefresh) {
+        needLettersRefresh=false;
+       
+        display.setCursor(0,CURSOR_Y_THIRD_LINE);
         for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, mlib.buffer_size[currentInputBufferLine]);
-          //char c = buffer[index];
-          char c = mlib.buffers[currentInputBufferLine][index];
-         /* 
-          if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-            display.setTextColor(BLACK, WHITE);
+          if (i <= select_index_max) {
+            char c = mlib.buffers[currentInputBufferLine][bufferOffset+i];
             display.print(c);
-            display.setTextColor(WHITE, BLACK);
-          } else  {
-          */
-            display.print(c);          
+          } else {
+            display.print(' ');
+          }
         }
         display.display();   
       }
       
+      // Render updated selectors
+      if (needSelectorRefresh) {
+        needSelectorRefresh=false;
+
+        // Overwrite previous selectors with blank char
+        display.setCursor((old_select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
+        display.print(' '); // space
+        display.setCursor((old_select_index)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
+        display.print(' '); // space
+
+        // Redraw selectors at right position
+        display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
+        display.print((char)31); // triangle pointing down
+        display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
+        display.print((char)30); // triangle pointing up
+       
+        display.display();   
+      }
       delay(1);
     }
 
@@ -448,145 +437,6 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
     return true;
 }
 
-/*
-bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, int firstAsciiChar, int lastAsciiChar)
-{
-    char buffer[100]; // minimized to save stack space while fitting worst case of firstAscii=33, lastAscii=126, and DONE_STRING=4 bytes => 98 bytes 
-   
-    int nbChars = lastAsciiChar - firstAsciiChar +1;
-    int DONE_chars_start_index, DONE_chars_stop_index;
-
-    char DONE_STRING[] = "DONE";
-    for (int i=0; i<nbChars;i++) {
-      buffer[i] = (char)firstAsciiChar+i;
-    }
-
-    DONE_chars_start_index = nbChars;
-    for (int j=nbChars; j<nbChars+strlen(DONE_STRING);j++) {
-      buffer[j] = DONE_STRING[j-nbChars];
-    }
-    DONE_chars_stop_index = nbChars+strlen(DONE_STRING);
-    nbChars+=strlen(DONE_STRING);
-   
-    int cursorX=0;
-    int nbCharsValidated = 0;
-    char pivot_char = 0;
-    
-    display.clearDisplay();
-    display.setCursor(cursorX,0);
-    display.print(invite);
-    cursorX = display.getCursorX();
-
-    // print the expected number of chars to be input, where they will appear once validated
-    for (int n=0; n<numChars; n++) {
-      display.print(CODE_SLOT_CHAR);
-    }
-    
-    // display the cursors pointing to the currently selected char
-    display.setCursor((PIVOT_CHAR_INDEX)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
-    display.print((char)31); // triangle pointing down
-    display.setCursor((PIVOT_CHAR_INDEX)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
-    display.print((char)30); // triangle pointing up
-
-    // display rolling list of chars on third line
-    display.setCursor(0,CURSOR_Y_THIRD_LINE);
-
-
-
-
-
-
-
-    for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-      //char c = firstAsciiChar + mod(pivot_char + i - PIVOT_CHAR_INDEX, nbChars);
-      int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, nbChars);
-      char c = buffer[index];
-
-      if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-        display.setTextColor(BLACK, WHITE);
-        display.print(c);
-        display.setTextColor(WHITE, BLACK);
-      } else  {
-        display.print(c);
-      }
-    }
-
-    // render
-    display.display();
-        
-    // Loop until required numChars characters are input by user
-    while (1) {
-
-      check_buttons(BUTTON_REPEAT_TIME_SLOW);
-
-      // If knob switch was pushed, validate current char
-      if (justpressed[YButtonIndex]) {
-
-        if ((pivot_char >= DONE_chars_start_index) && (pivot_char <= DONE_chars_stop_index)) 
-          break;
-          
-        display.setCursor(cursorX,0);
-        display.print(buffer[pivot_char]); 
-        display.display();        
-        cursorX += CHAR_XSIZE;
-          
-        dst[nbCharsValidated] = (buffer[pivot_char]);
-        
-        nbCharsValidated++;
-        if (nbCharsValidated == numChars)
-          break;
-      } 
-      else if (justpressed[UpButtonIndex]) {
-
-        pivot_char = mod(pivot_char+1,nbChars);
-        
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
-    
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, nbChars);
-          char c = buffer[index];
-
-          if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-            display.setTextColor(BLACK, WHITE);
-            display.print(c);
-            display.setTextColor(WHITE, BLACK);
-          } else  {
-            display.print(c);
-          }    
-        }    
-        display.display();
-      }
-      else if (justpressed[DownButtonIndex]) {
-
-        pivot_char = mod(pivot_char-1,nbChars);
-        
-        display.setCursor(0,CURSOR_Y_THIRD_LINE);
-    
-        for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-          int index = mod(pivot_char + i - PIVOT_CHAR_INDEX, nbChars);
-          char c = buffer[index];
-          
-          if ((index >= DONE_chars_start_index) && (index <= DONE_chars_stop_index)) {
-            display.setTextColor(BLACK, WHITE);
-            display.print(c);
-            display.setTextColor(WHITE, BLACK);
-          } else  {
-            display.print(c);
-          }  
-        }  
-        
-        display.display();    
-      }
-
-      delay(1);
-    }
-
-    // terminate the C-string
-    dst[nbCharsValidated]=0;
-    
-    return true;
-}
-*/
 int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) {
   
   byte selected_index = 0;
@@ -595,73 +445,9 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
   bool needRefresh = true;
 
   display.clearDisplay();
- 
-  while (1) {
 
-    check_buttons(BUTTON_REPEAT_TIME_FAST);
-
-    // If knob switch was pushed, return currently selected entry
-    if (justpressed[YButtonIndex]) {
-        if (nbEntries > SCREEN_MAX_NB_LINES) {
-          return (mod(selected_index+display_line_index, nbEntries));
-        } else {
-          return selected_index;
-        }
-    } 
-    else if (justpressed[UpButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index+1,nbEntries);
-      } else {
-        if (selected_index<(nbEntries-1))
-          selected_index++;
-      }
-      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
-        display_line_index++;
-      needRefresh = true;      
-    }
-    else if (held[UpButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index+1,nbEntries);
-      } else {
-        if (selected_index<(nbEntries-1))
-          selected_index++;
-      }
-      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
-        display_line_index++;
-      needRefresh = true;      
-    }    
-    else if (justpressed[DownButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index-1,nbEntries);
-      } else {
-        if (selected_index>0)
-          selected_index--;
-      }
-      if (display_line_index>0)
-        display_line_index--;
-      needRefresh = true; 
-    }
-    else if (held[DownButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index-1,nbEntries);
-      } else {
-        if (selected_index>0)
-          selected_index--;
-      }
-      if (display_line_index>0)
-        display_line_index--;
-      needRefresh = true; 
-    } 
-   if (needRefresh) {
-
-
-
-      unsigned long StartTime = millis();
-
-      needRefresh = false;
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
-
 
         if (i>= nbEntries) {
           break;
@@ -682,6 +468,100 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
           }  
 
           display.print(menuEntryText);
+         
+          y+= CHAR_YSIZE;
+        }
+      }
+          display.display();
+ 
+  while (1) {
+
+    check_buttons(BUTTON_REPEAT_TIME_FAST);
+
+    // If validation button was pushed, return currently selected entry
+    if (justpressed[YButtonIndex]) {
+        if (nbEntries > SCREEN_MAX_NB_LINES) {
+          return (mod(selected_index+display_line_index, nbEntries));
+        } else {
+          return selected_index;
+        }
+    } 
+    else if (justpressed[UpButtonIndex]) {
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index-1,nbEntries);
+      } else {
+        if (selected_index>0)
+          selected_index--;
+      }
+      if (display_line_index>0)
+        display_line_index--;
+      needRefresh = true;       
+    }
+    else if (held[UpButtonIndex]) {
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index-1,nbEntries);
+      } else {
+        if (selected_index>0)
+          selected_index--;
+      }
+      if (display_line_index>0)
+        display_line_index--;
+      needRefresh = true;     
+    }    
+    else if (justpressed[DownButtonIndex]) {
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index+1,nbEntries);
+      } else {
+        if (selected_index<(nbEntries-1))
+          selected_index++;
+      }
+      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
+        display_line_index++;
+      needRefresh = true;       
+    }
+    else if (held[DownButtonIndex]) {
+      if (nbEntries > SCREEN_MAX_NB_LINES) {
+        selected_index = mod(selected_index+1,nbEntries);
+      } else {
+        if (selected_index<(nbEntries-1))
+          selected_index++;
+      }
+      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
+        display_line_index++;
+      needRefresh = true;      
+    } 
+   
+   
+    if (needRefresh) {
+
+
+      
+    //  unsigned long StartTime = millis();
+
+      needRefresh = false;
+      int y = 0;
+      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
+
+
+        if (i>= nbEntries) {
+          break;
+        } else {
+
+        //  if (nbEntries > SCREEN_MAX_NB_LINES) {
+        //    getStringFromFlash(menuEntryText, menutexts[mod(selected_index+i,nbEntries)]);
+        //  } else {
+        //    getStringFromFlash(menuEntryText, menutexts[i]);
+        //  }
+          display.setCursor((DISPLAY_WIDTH - (strlen(menuEntryText)+4)*CHAR_XSIZE)/2,y);
+        
+          if (i==display_line_index) {
+            display.print((char)16);
+            display.print(' ');
+          } else {
+            display.print("  ");
+          }  
+
+      //    display.print(menuEntryText);
 
 
 
@@ -691,9 +571,9 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
       }
           display.display();
 
-      unsigned long CurrentTime = millis();
-  unsigned long ElapsedTime = CurrentTime - StartTime;
-  Serial.print("get String time:"); Serial.println(ElapsedTime);        
+ //     unsigned long CurrentTime = millis();
+ // unsigned long ElapsedTime = CurrentTime - StartTime;
+ // Serial.print("get String time:"); Serial.println(ElapsedTime);        
    }
      
    delay(1);
@@ -1168,7 +1048,7 @@ void setup()   {
 
 
   // debug feature to force reformatting
-  messUpEEPROMFormat();
+  //messUpEEPROMFormat();
 
   if(!ES.readHeader(devName)) {
     displayCenteredMessageFromStoredString((uint8_t*)&NEED_FORMAT);
