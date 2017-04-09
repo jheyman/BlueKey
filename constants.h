@@ -62,5 +62,11 @@
 #define ACCOUNT_TITLE_LENGTH 12
 #define ACCOUNT_LOGIN_LENGTH 12
 
+typedef struct {
+  char* buffers[5]; 
+  char buffer_size[5];
+  byte nbBuffers;
+} MultilineInputBuffer;
+
 #endif
 

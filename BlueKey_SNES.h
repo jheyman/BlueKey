@@ -39,7 +39,8 @@ const static char MENU_GETPWD[] PROGMEM   = "Get Password  ";
 const static char MENU_SETPWD[] PROGMEM   = "Set Password  ";
 const static char MENU_CLEARPWD[] PROGMEM = "Clear Password";
 const static char MENU_FORMAT[] PROGMEM   = "Format        ";
-#define MAIN_MENU_NB_ENTRIES 4
+const static char MENU_DUMMY[] PROGMEM    = "Dummy Entry   ";
+#define MAIN_MENU_NB_ENTRIES 5
 
 const static char MENU_SETPWD_GENERATE[] PROGMEM      = "Generate";
 const static char MENU_SETPWD_MANUALINPUT[] PROGMEM   = "Manually";
@@ -59,6 +60,8 @@ void check_buttons(int repeatDelay)
   static long pressTime[NUMBUTTONS];
   static long lasttime;
   byte index;
+
+  memset(justpressed,0,NUMBUTTONS*sizeof(byte));
 
   if (millis()<lasttime) {// we wrapped around, lets just try again
      lasttime = millis();
@@ -234,20 +237,11 @@ void __attribute__ ((noinline)) getCodeFromUser(char* dst, const uint8_t numChar
     dst[nbCharsValidated]=0;
 }
 
-#define PIVOT_CHAR_INDEX 10
-
-
 char * UpperCaseLetters="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 char * LowerCaseLetters="abcdefghijklmnopqrstuvwxyz";
 char * SpecialCharacters="&~#'@*$!";
 char * Numbers="012345678";
 char * Done="[DONE]";
-
-typedef struct {
-  char* buffers[5]; 
-  char buffer_size[5];
-  byte nbBuffers;
-} MultilineInputBuffer;
 
 bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, MultilineInputBuffer mlib)
 {
@@ -255,8 +249,8 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
        
     int cursorX=0;
     int nbCharsValidated = 0;
-    byte select_index = PIVOT_CHAR_INDEX;
-    byte old_select_index = PIVOT_CHAR_INDEX;
+    byte select_index = 0;
+    byte old_select_index = 0;
     byte select_index_max = 0;
 
     byte bufferOffset = 0;
@@ -264,7 +258,7 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
 
     bool needLettersRefresh=true;
     bool needSelectorRefresh=true;
-     
+    
     if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
       bufferOffsetMax = 0; 
     else
@@ -359,15 +353,15 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
       else if (justpressed[UpButtonIndex] ) {
         old_select_index = select_index;
         currentInputBufferLine = mod(currentInputBufferLine-1,mlib.nbBuffers);
-        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+        
+        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE) {
           bufferOffsetMax = 0; 
-        else
-          bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
-    
-        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
           select_index_max = mlib.buffer_size[currentInputBufferLine] - 1; 
-        else
-          select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;     
+        }
+        else {
+          bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
+          select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;
+        }            
 
         if (select_index > select_index_max) select_index = select_index_max;
              
@@ -378,15 +372,15 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
 
         old_select_index = select_index;
         currentInputBufferLine = mod(currentInputBufferLine+1,mlib.nbBuffers);
-        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
+        
+        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE) {
           bufferOffsetMax = 0; 
-        else
+          select_index_max = mlib.buffer_size[currentInputBufferLine] - 1;          
+        }
+        else {
           bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
-    
-        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
-          select_index_max = mlib.buffer_size[currentInputBufferLine] - 1; 
-        else
           select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;
+        }
 
         if (select_index > select_index_max) select_index = select_index_max;
         
@@ -395,9 +389,7 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
       }
 
       // Render updated screen
-      if (needLettersRefresh) {
-        needLettersRefresh=false;
-       
+      if (needLettersRefresh) {    
         display.setCursor(0,CURSOR_Y_THIRD_LINE);
         for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
           if (i <= select_index_max) {
@@ -407,13 +399,10 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
             display.print(' ');
           }
         }
-        display.display();   
       }
       
       // Render updated selectors
       if (needSelectorRefresh) {
-        needSelectorRefresh=false;
-
         // Overwrite previous selectors with blank char
         display.setCursor((old_select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
         display.print(' '); // space
@@ -424,10 +413,16 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
         display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
         display.print((char)31); // triangle pointing down
         display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
-        display.print((char)30); // triangle pointing up
-       
-        display.display();   
+        display.print((char)30); // triangle pointing up    
       }
+
+      // Send modified data to screen when it was changed
+      if (needLettersRefresh || needSelectorRefresh) {
+        display.display();   
+        if (needLettersRefresh) needLettersRefresh= false;
+        if (needSelectorRefresh) needSelectorRefresh= false;
+     }
+      
       delay(1);
     }
 
@@ -439,143 +434,122 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
 
 int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) {
   
-  byte selected_index = 0;
-  byte display_line_index = 0;
+  byte menu_line_offset= 0;
+  byte menu_line_offset_max = 0;
+  byte selector_line_index = 0;
+  byte selector_line_index_max = 0;
   char menuEntryText[32];
-  bool needRefresh = true;
+  bool needMenuRefresh = true;
+  bool needSelectorRefresh = true;
+
+  if (nbEntries < SCREEN_MAX_NB_LINES) {
+    menu_line_offset_max = 0;
+    selector_line_index_max = nbEntries-1;    
+  } else {
+    menu_line_offset_max = nbEntries - SCREEN_MAX_NB_LINES;
+    selector_line_index_max = SCREEN_MAX_NB_LINES-1;
+  }
 
   display.clearDisplay();
 
-      int y = 0;
-      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
-
-        if (i>= nbEntries) {
-          break;
-        } else {
-
-          if (nbEntries > SCREEN_MAX_NB_LINES) {
-            getStringFromFlash(menuEntryText, menutexts[mod(selected_index+i,nbEntries)]);
-          } else {
-            getStringFromFlash(menuEntryText, menutexts[i]);
-          }
-          display.setCursor((DISPLAY_WIDTH - (strlen(menuEntryText)+4)*CHAR_XSIZE)/2,y);
-        
-          if (i==display_line_index) {
-            display.print((char)16);
-            display.print(' ');
-          } else {
-            display.print("  ");
-          }  
-
-          display.print(menuEntryText);
-         
-          y+= CHAR_YSIZE;
-        }
-      }
-          display.display();
- 
   while (1) {
 
     check_buttons(BUTTON_REPEAT_TIME_FAST);
 
     // If validation button was pushed, return currently selected entry
     if (justpressed[YButtonIndex]) {
-        if (nbEntries > SCREEN_MAX_NB_LINES) {
-          return (mod(selected_index+display_line_index, nbEntries));
-        } else {
-          return selected_index;
-        }
+      return menu_line_offset + selector_line_index;
     } 
     else if (justpressed[UpButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index-1,nbEntries);
-      } else {
-        if (selected_index>0)
-          selected_index--;
+      if (selector_line_index>0) {
+        selector_line_index--;
+        needSelectorRefresh = true;       
       }
-      if (display_line_index>0)
-        display_line_index--;
-      needRefresh = true;       
+      else {
+        if (menu_line_offset>0) {
+          menu_line_offset--;
+          needMenuRefresh = true;
+        }
+      }
     }
     else if (held[UpButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index-1,nbEntries);
-      } else {
-        if (selected_index>0)
-          selected_index--;
+      if (selector_line_index>0) {
+        selector_line_index--;
+        needSelectorRefresh = true;       
       }
-      if (display_line_index>0)
-        display_line_index--;
-      needRefresh = true;     
+      else {
+        if (menu_line_offset>0) {
+          menu_line_offset--;
+          needMenuRefresh = true;
+        }
+      }
     }    
     else if (justpressed[DownButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index+1,nbEntries);
-      } else {
-        if (selected_index<(nbEntries-1))
-          selected_index++;
+      if (selector_line_index < selector_line_index_max) {
+        selector_line_index++;
+        needSelectorRefresh = true;
       }
-      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
-        display_line_index++;
-      needRefresh = true;       
+      else {
+        if (menu_line_offset < menu_line_offset_max) {
+          menu_line_offset++;  
+          needMenuRefresh = true; 
+        }
+      }     
     }
     else if (held[DownButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index+1,nbEntries);
-      } else {
-        if (selected_index<(nbEntries-1))
-          selected_index++;
+      if (selector_line_index < selector_line_index_max) {
+        selector_line_index++;
+        needSelectorRefresh = true;
       }
-      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
-        display_line_index++;
-      needRefresh = true;      
+      else {
+        if (menu_line_offset < menu_line_offset_max) {
+          menu_line_offset++;  
+          needMenuRefresh = true; 
+        }
+      }    
     } 
-   
-   
-    if (needRefresh) {
-
-
       
-    //  unsigned long StartTime = millis();
-
-      needRefresh = false;
+    if (needMenuRefresh) {   
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
+        if (i>= nbEntries) {
+          break;
+        } else {
+          getStringFromFlash(menuEntryText, menutexts[menu_line_offset+i]);
+          display.setCursor(2*CHAR_XSIZE,y);      
+          display.print(menuEntryText);         
+          y+= CHAR_YSIZE;
+        }
+      }      
+   }
 
+   if (needSelectorRefresh) {
+      int y = 0;
+      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
 
         if (i>= nbEntries) {
           break;
         } else {
+          
+          display.setCursor(0,y);     
 
-        //  if (nbEntries > SCREEN_MAX_NB_LINES) {
-        //    getStringFromFlash(menuEntryText, menutexts[mod(selected_index+i,nbEntries)]);
-        //  } else {
-        //    getStringFromFlash(menuEntryText, menutexts[i]);
-        //  }
-          display.setCursor((DISPLAY_WIDTH - (strlen(menuEntryText)+4)*CHAR_XSIZE)/2,y);
-        
-          if (i==display_line_index) {
+          if (i==selector_line_index) {
             display.print((char)16);
             display.print(' ');
           } else {
             display.print("  ");
           }  
-
-      //    display.print(menuEntryText);
-
-
-
-          
           y+= CHAR_YSIZE;
         }
       }
-          display.display();
-
- //     unsigned long CurrentTime = millis();
- // unsigned long ElapsedTime = CurrentTime - StartTime;
- // Serial.print("get String time:"); Serial.println(ElapsedTime);        
    }
-     
+
+   if (needSelectorRefresh || needMenuRefresh) {
+      display.display();
+      if (needSelectorRefresh) needSelectorRefresh = false;
+      if (needMenuRefresh) needMenuRefresh = false;
+   }
+        
    delay(1);
   }
 }
@@ -586,7 +560,9 @@ int __attribute__ ((noinline)) main_menu() {
   menutexts[1] =   (uint8_t*)&MENU_SETPWD;
   menutexts[2] =   (uint8_t*)&MENU_CLEARPWD;
   menutexts[3] =   (uint8_t*)&MENU_FORMAT;
-  return generic_menu(MAIN_MENU_NB_ENTRIES, menutexts);
+  menutexts[4] =   (uint8_t*)&MENU_DUMMY;
+  //return generic_menu(MAIN_MENU_NB_ENTRIES, menutexts);
+  return generic_menu(3, menutexts);
 }
 
 int __attribute__ ((noinline)) menu_set_pwd() {
@@ -638,9 +614,6 @@ void __attribute__ ((noinline)) generatePassword() {
 
     memset(&entry, 0, sizeof(entry));
     char buf[16];
-    
-    getStringFromFlash(buf, (uint8_t*)&ACCOUNT_TITLE_INPUT);
-
 
     MultilineInputBuffer mlib;
     mlib.nbBuffers=5;
@@ -653,8 +626,9 @@ void __attribute__ ((noinline)) generatePassword() {
     mlib.buffers[3]= Numbers;
     mlib.buffer_size[3] = strlen(mlib.buffers[3]);
     mlib.buffers[4]= Done;
-    mlib.buffer_size[4] = strlen(mlib.buffers[4]);
+    mlib.buffer_size[4] = strlen(mlib.buffers[4]);    
     
+    getStringFromFlash(buf, (uint8_t*)&ACCOUNT_TITLE_INPUT);  
     getStringFromUser(entry.title, ACCOUNT_TITLE_LENGTH, buf, mlib);
 
     getStringFromFlash(buf, (uint8_t*)&ACCOUNT_LOGIN_INPUT);
@@ -667,7 +641,7 @@ void __attribute__ ((noinline)) generatePassword() {
       mlib.buffers[0]= Numbers;
       mlib.buffer_size[0] = strlen(mlib.buffers[0]);   
       mlib.buffers[1]= Done;
-      mlib.buffer_size[1] = strlen(mlib.buffers[4]);
+      mlib.buffer_size[1] = strlen(mlib.buffers[1]);
       
       getStringFromUser(len_string, 2, buf, mlib );
         
@@ -775,6 +749,156 @@ void __attribute__ ((noinline)) inputPassword() {
   } 
 }
 
+int __attribute__ ((noinline)) pickEntry() {
+
+  byte menu_line_offset= 0;
+  byte menu_line_offset_max = 0;
+  byte selector_line_index = 0;
+  byte selector_line_index_max = 0;
+  char menuEntryText[32];
+  bool needMenuRefresh = true;
+  bool needSelectorRefresh = true;
+
+  uint8_t entryNum=0;
+  uint8_t nbEntries=0;
+  bool hasEntry=false;
+  uint8_t maxEntryLength=0;
+ 
+  do
+  {
+    hasEntry = ES.getTitle(entryNum, menuEntryText);
+    if(hasEntry)
+    {
+      DEBUG(Serial.print("Entry ");)
+      DEBUG(Serial.print(entryNum);)
+      DEBUG(Serial.print(": ");)
+      DEBUG(Serial.println(menuEntryText);)
+      int len = strlen(menuEntryText);
+      if (len>maxEntryLength) maxEntryLength = len;
+      entryNum++;
+    }
+  } while (hasEntry);
+
+  nbEntries = entryNum;
+
+  if (nbEntries < SCREEN_MAX_NB_LINES) {
+    menu_line_offset_max = 0;
+    selector_line_index_max = nbEntries-1;   
+  } else {
+    menu_line_offset_max = nbEntries - SCREEN_MAX_NB_LINES;
+    selector_line_index_max = SCREEN_MAX_NB_LINES-1;
+  }
+
+  display.clearDisplay();
+
+  while (1) {
+
+    check_buttons(BUTTON_REPEAT_TIME_FAST);
+
+    // If validation button was pushed, return currently selected entry
+    if (justpressed[YButtonIndex]) {
+          return menu_line_offset + selector_line_index;
+    } 
+    else if (justpressed[UpButtonIndex]) {
+      if (selector_line_index>0) {
+        selector_line_index--;
+        needSelectorRefresh = true;       
+      }
+      else {
+        if (menu_line_offset>0) {
+          menu_line_offset--;
+          needMenuRefresh = true;
+        }
+      }
+    }
+    else if (held[UpButtonIndex]) {
+      if (selector_line_index>0) {
+        selector_line_index--;
+        needSelectorRefresh = true;       
+      }
+      else {
+        if (menu_line_offset>0) {
+          menu_line_offset--;
+          needMenuRefresh = true;
+        }
+      }
+    }    
+    else if (justpressed[DownButtonIndex]) {
+      if (selector_line_index < selector_line_index_max) {
+        selector_line_index++;
+        needSelectorRefresh = true;
+      }
+      else {
+        if (menu_line_offset < menu_line_offset_max) {
+          menu_line_offset++;  
+          needMenuRefresh = true; 
+        }
+      }     
+    }
+    else if (held[DownButtonIndex]) {
+      if (selector_line_index < selector_line_index_max) {
+        selector_line_index++;
+        needSelectorRefresh = true;
+      }
+      else {
+        if (menu_line_offset < menu_line_offset_max) {
+          menu_line_offset++;  
+          needMenuRefresh = true; 
+        }
+      }    
+    } 
+      
+    if (needMenuRefresh) {   
+      int y = 0;
+      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
+        if (i>= nbEntries) {
+          break;
+        } else {
+
+          ES.getTitle(menu_line_offset+i, menuEntryText);
+          int entryLen = strlen(menuEntryText);
+          display.setCursor(2*CHAR_XSIZE,y);
+          display.print(menuEntryText);
+          if (entryLen<maxEntryLength) {
+             for (int k=0;k<SCREEN_MAX_NB_CHARS_PER_LINE-entryLen-2;k++){
+               display.print(' ');
+             }
+           }        
+          y+= CHAR_YSIZE;
+        }
+      }      
+   }
+
+   if (needSelectorRefresh) {
+      int y = 0;
+      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
+
+        if (i>= nbEntries) {
+          break;
+        } else {   
+          display.setCursor(0,y);
+          if (i==selector_line_index) {
+            display.print((char)16);
+            display.print(' ');
+          } else {
+            display.print("  ");
+          }  
+          y+= CHAR_YSIZE;
+        }
+      }
+   }
+
+   if (needSelectorRefresh || needMenuRefresh) {
+      display.display();
+      if (needSelectorRefresh) needSelectorRefresh = false;
+      if (needMenuRefresh) needMenuRefresh = false;
+   }
+        
+   delay(1);
+  } 
+}
+
+/*
 int __attribute__ ((noinline)) pickEntry() {
 
   char eName[32];
@@ -891,6 +1015,7 @@ int __attribute__ ((noinline)) pickEntry() {
   }
   
 }
+*/
 ////////////////////
 // MISC
 ////////////////////
@@ -989,13 +1114,6 @@ bool __attribute__ ((noinline)) login()
 ////////////////////
 void setup()   {  
 
-
- //Serial.begin(115200);
- //return;
-
-
- 
-
   // Initialize stack canary
   paintStack();
     
@@ -1009,7 +1127,6 @@ void setup()   {
   //memset(lastDebounceTime,0,16*sizeof(long));
 
   memset(pressed,0,NUMBUTTONS*sizeof(byte));
-  memset(justpressed,0,NUMBUTTONS*sizeof(byte));
   
 
   
@@ -1074,14 +1191,6 @@ void setup()   {
 static long loopidx=0;
 void loop() {
 
-
-  //Serial.print("toto ");
-  //delay(1000);
-  //return;
-
-
-
-
   int entry_choice;
   int selection = main_menu();
   entry_t temp;
@@ -1102,10 +1211,9 @@ void loop() {
             displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
       break;
     case 1:
-      // SET_PWD     
-      //int set_pwd_selection = menu_set_pwd();
-          
-      switch (menu_set_pwd()) {
+      // SET_PWD              
+      entry_choice = menu_set_pwd();
+      switch (entry_choice) {
         case 0:
           // GENERATE
           generatePassword();
@@ -1115,6 +1223,7 @@ void loop() {
           inputPassword();         
           break;
       }
+      Serial.print("Menu_set_pwd returned "); Serial.println(entry_choice);
       break;
     case 2:
       // CLEAR_PWD
