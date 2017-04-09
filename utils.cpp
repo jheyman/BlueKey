@@ -3,14 +3,24 @@
 #include "display.h"
 #include "constants.h"
 
+#define STACK_CANARY_VAL 0xfd
+
+extern int __heap_end;
+extern int __heap_start;
+extern int __stack;
+extern int __bss_start;  
+
+extern int __data_end;
+extern int __data_start; 
+extern int * __brkval; 
+extern int __bss_end; 
+
 void __attribute__ ((noinline)) displayMessage(char* msg, int X, int Y) {  
 
     display.clearDisplay();    
     display.setCursor(X,Y);
     display.print(msg);
-    display.display(); 
-
-    delay(1000);
+    display.display();
 }
 
 void __attribute__ ((noinline)) displayCenteredMessage(char* msg) {  
@@ -90,10 +100,6 @@ void printHexBuff(byte* buff, char* name, int len) {
     }
 }
 
-#define STACK_CANARY_VAL 0xfd
-extern uint8_t  __stack;
-extern char *__bss_end;
-
 void paintStack() {
   uint8_t *p = (uint8_t *)&__bss_end;
   while(p <= SP) *p++ = STACK_CANARY_VAL;
@@ -114,17 +120,7 @@ uint16_t StackMarginWaterMark(void) {
 void printSRAMMap() {
     int dummy;
     int free_ram; 
-    extern int __heap_end;
-    extern int __heap_start;
-    extern int __stack;
-    extern int __bss_start;  
 
-    extern int __data_end;
-    extern int __data_start; 
-    extern int * __brkval; 
-    extern int __bss_end; 
-
-    int stack=&__stack; 
     free_ram =  (int) &dummy - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
   
     Serial.print("\nMemory map:");
@@ -155,10 +151,7 @@ void printSRAMMap() {
     
     Serial.print("\n, stack bottom=");
     Serial.print((int)&dummy);
-         
-    Serial.print("\n, __stack top=");
-    Serial.print((int)&__stack);  
-        
+      
     Serial.print("\n, RAMEND=");
     Serial.println(RAMEND);
 

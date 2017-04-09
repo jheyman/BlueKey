@@ -7,9 +7,11 @@
 #include "display.h"
 #include "utils.h"
 
+// Activate Serial debug traces (or not)
 #define DEBUG_ENABLE 0
 #define DEBUG(x) if(DEBUG_ENABLE) { x }
 
+// Strings stored in program memory (to spare SRAM)
 // max 21 characters per line
 const static char NEW_CODE_INVITE[] PROGMEM = "NEW CODE? ";
 const static char REPEAT_CODE_INVITE[] PROGMEM = "REPEAT? ";
@@ -22,25 +24,25 @@ const static char DEVICE_EMPTY[] PROGMEM = "Device is empty";
 const static char NEED_FORMAT[] PROGMEM = "Format needed";
 const static char LOGIN_GRANTED[] PROGMEM = "OK";
 const static char LOGIN_DENIED[] PROGMEM = "DENIED";
-
 const static char DEVICE_FULL[] PROGMEM = "Error: device full";
-
 const static char ACCOUNT_TITLE_INPUT[] PROGMEM = "Account? ";
 const static char ACCOUNT_LOGIN_INPUT[] PROGMEM = "Login? ";
 const static char PASSWORD_LENGTH_INPUT[] PROGMEM = "Length? [0-16] ";
 const static char PASSWORD_VALUE_INPUT[] PROGMEM = "Pwd? ";
 const static char STORING_NEW_PASSWORD[] PROGMEM = "Storing...";
 
+// Menu entries texts
 // Rules:
-// max 21 characters per line, minus left triangle cursor and one space => max 19 chars max per line, including starting and trailing space
-// also, to avoid avoid to explicitly clear the display, make all entries the same size so that all text gets overwritten.
-                                          // "  XXXXXXXXXXXXXXXXX ";
+// max 21 characters per line, minus left triangle cursor and one space at the beginning, and one char for arrow cursors on the right  => max 18 chars max per line, including starting and trailing space
+// also, to avoid to explicitly clear the display, make all entries the same size so that all text gets overwritten.
+                                         // "<-----MAX------>";
 const static char MENU_GETPWD[] PROGMEM   = "Get Password  ";
 const static char MENU_SETPWD[] PROGMEM   = "Set Password  ";
 const static char MENU_CLEARPWD[] PROGMEM = "Clear Password";
 const static char MENU_FORMAT[] PROGMEM   = "Format        ";
-const static char MENU_DUMMY[] PROGMEM    = "Dummy Entry   ";
-#define MAIN_MENU_NB_ENTRIES 5
+const static char MENU_TEST1[] PROGMEM    = "TEST1         ";
+const static char MENU_TEST2[] PROGMEM    = "TEST2         ";
+#define MAIN_MENU_NB_ENTRIES 6
 
 const static char MENU_SETPWD_GENERATE[] PROGMEM      = "Generate";
 const static char MENU_SETPWD_MANUALINPUT[] PROGMEM   = "Manually";
@@ -48,109 +50,106 @@ const static char MENU_SETPWD_MANUALINPUT[] PROGMEM   = "Manually";
 
 const static char MENU_SETPWD_GENERATE_LENGTH[] PROGMEM      = "Length?";
 
+////////////////////////////////
+// Gamepad buttons management //
+////////////////////////////////
 
-byte buttons[] = {UpButtonPin, DownButtonPin, LeftButtonPin, RightButtonPin, YButtonPin};
+byte buttons[] = {UpButtonPin, DownButtonPin, LeftButtonPin, RightButtonPin, YButtonPin, StartButtonPin};
 #define NUMBUTTONS sizeof(buttons)
-boolean pressed[NUMBUTTONS], justpressed[NUMBUTTONS], repeat[NUMBUTTONS], held[NUMBUTTONS];
+boolean button_pressed[NUMBUTTONS], button_justpressed[NUMBUTTONS], button_held[NUMBUTTONS];
 
-void check_buttons(int repeatDelay)
+void check_buttons()
 {
   static byte lateststate[NUMBUTTONS];
-  static long repeatTime[NUMBUTTONS];
   static long pressTime[NUMBUTTONS];
-  static long lasttime;
+  static unsigned long lasttime;
   byte index;
 
-  memset(justpressed,0,NUMBUTTONS*sizeof(byte));
+  // reset newly pressed button statuses
+  memset(button_justpressed,0,NUMBUTTONS*sizeof(byte));
 
-  if (millis()<lasttime) {// we wrapped around, lets just try again
+  // handle case of millis wrapping around
+  if (millis()<lasttime) {
      lasttime = millis();
   }
-  
+
+  // if latest check is not yet older than <debounce time>, no need to check yet
   if ((lasttime + DEBOUNCE_TIME) > millis()) {
     return; 
   }
   
   lasttime = millis();
-  
+
+  // Rescan buttons status
   for (index = 0; index<NUMBUTTONS; index++) {
-    justpressed[index] = 0;
      
     byte newstate = digitalRead(buttons[index]);
 
     // If two readings in a row give the same value, state is confirmed
     if (newstate == lateststate[index]) {
       // If button was not pressed, but now is (state LOW = input activated):
-      if ((pressed[index] == false) && (newstate == LOW)) {
-          justpressed[index] = 1;
+      if ((button_pressed[index] == false) && (newstate == LOW)) {
+          button_justpressed[index] = 1;
           pressTime[index] = millis();
-          repeatTime[index] = pressTime[index];
-      } else if ((pressed[index] == true) && (newstate == HIGH)) {
-          repeat[index] = false;
-          held[index] = false;
+      } else if ((button_pressed[index] == true) && (newstate == HIGH)) {
+          button_held[index] = false;
       }
       // Keep track of current confirmed button state
-      pressed[index] = !newstate;
-      
+      button_pressed[index] = !newstate;
     }
 
-    // if button repeat time had been reached last time, reset it now to wait again before repeating again
-    if (repeat[index]== true){
-      repeat[index] = false;
-      repeatTime[index] = millis();
-    }      
-
     // Check is button has been pressed long enough since last press/repeat time
-    if (pressed[index]) {
-      
-      if ( millis() - repeatTime[index] > repeatDelay) {
-        repeat[index] = true;
-      }
-      
+    if (button_pressed[index]) {
+           
       if (millis() - pressTime[index] > BUTTON_HOLD_TIME) {
-        held[index] = true;
+        button_held[index] = true;
       }
     }
         
     lateststate[index] = newstate;   
   }
 }
+////////////////////////////////
+// VARIOUS GUI ROUTINES
+////////////////////////////////
 
 bool __attribute__ ((noinline)) confirmChoice(char* text)
 {
     int cursorX = (DISPLAY_WIDTH - strlen(text)*CHAR_XSIZE)/2;
 
-    int nbCharsValidated = 0;
     bool confirmed=false;
     bool needRefresh = true;
-    char c = CODE_SLOT_CHAR;
 
+    // Print question text
     display.clearDisplay();    
     display.setCursor(cursorX,CURSOR_Y_FIRST_LINE);
     display.print(text);     
     display.display();
            
-    // Require numChars input characters from user
+    // Scan buttons indefinitely until choice is validated by user
     while (1) {
 
-      check_buttons(BUTTON_REPEAT_TIME_SLOW);
+      check_buttons();
 
-      // If knob switch was pushed, validate current char
-      if (justpressed[YButtonIndex]) {
+      // User pushed validation button  
+      if (button_justpressed[YButtonIndex]) {
         return confirmed;
-      } 
-      else if (justpressed[UpButtonIndex] || repeat[UpButtonIndex]) {
-        confirmed = !confirmed;
+      }
+      // Change to "Yes"
+      else if (button_justpressed[LeftButtonIndex]) {
+        if (!confirmed) confirmed=true;
         needRefresh = true;
       }
-      else if (justpressed[DownButtonIndex] || repeat[DownButtonIndex]) {
-        confirmed = !confirmed;
+      // Change to "No"
+      else if (button_justpressed[RightButtonIndex]) {
+        if (confirmed) confirmed = false;
         needRefresh = true;
       }
 
       if (needRefresh) {
           needRefresh = false;
 
+          // set cursor so that "Yes No" string is centered
           display.setCursor((DISPLAY_WIDTH - strlen("Yes No")*CHAR_XSIZE)/2,CURSOR_Y_THIRD_LINE);
 
           if (confirmed) {
@@ -169,85 +168,20 @@ bool __attribute__ ((noinline)) confirmChoice(char* text)
           display.display();
        }
 
-      delay(10);  
+      delay(1);  
     }
 }
 
-
-void __attribute__ ((noinline)) getCodeFromUser(char* dst, const uint8_t numChars, const char *invite, int firstAsciiChar, int lastAsciiChar)
-{
-    int nbChars = lastAsciiChar - firstAsciiChar +1;
-    int charIndex = 0;
-  
-    int cursorX = (DISPLAY_WIDTH - (numChars+strlen(invite))*CHAR_XSIZE)/2;
-    int cursorY = (DISPLAY_HEIGHT - CHAR_YSIZE)/2;
-
-    int nbCharsValidated = 0;
-    char c = CODE_SLOT_CHAR;
-
-    display.clearDisplay();    
-    display.setCursor(cursorX,cursorY);
-    display.print(invite);
-       
-    cursorX = display.getCursorX();
-    for (int n=0; n<numChars; n++) {
-      display.print(CODE_SLOT_CHAR);
-    }
-      
-    display.display();
-         
-    // Require numChars input characters from user
-    while (1) {
-
-      check_buttons(BUTTON_REPEAT_TIME_SLOW);
- 
-      if (justpressed[YButtonIndex]) {
-        if (c != CODE_SLOT_CHAR)
-        {
-          dst[nbCharsValidated] = c;
-          nbCharsValidated++;
-          if (nbCharsValidated == numChars) break;
-          display.setCursor(cursorX,cursorY);
-          display.print(CODE_HIDE_CHAR);
-          display.display();
-          cursorX+=CHAR_XSIZE;
-          charIndex = 0; 
-          c = CODE_SLOT_CHAR;      
-        }
-      } 
-      else if (justpressed[UpButtonIndex] || repeat[UpButtonIndex]) {
-          charIndex++;
-          c = firstAsciiChar + mod(charIndex , nbChars);      
-          display.setCursor(cursorX,cursorY);
-          display.print(c);        
-          display.display();  
-      }
-      else if (justpressed[DownButtonIndex] || repeat[DownButtonIndex]) {
-        charIndex--;
-        c = firstAsciiChar + mod(charIndex , nbChars);       
-        display.setCursor(cursorX,cursorY);
-        display.print(c);
-        display.display();        
-      }
-
-      delay(10);  
-    }
-
-    // terminate the C-string
-    dst[nbCharsValidated]=0;
-}
-
-char * UpperCaseLetters="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-char * LowerCaseLetters="abcdefghijklmnopqrstuvwxyz";
-char * SpecialCharacters="&~#'@*$!";
-char * Numbers="012345678";
-char * Done="[DONE]";
+char UpperCaseLetters[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+char LowerCaseLetters[]="abcdefghijklmnopqrstuvwxyz";
+char SpecialCharacters[]="&~#'@*$!";
+char Numbers[]="012345678";
 
 bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, MultilineInputBuffer mlib)
 {
     byte currentInputBufferLine = 0;
        
-    int cursorX=0;
+    int cursorX = 0;
     int nbCharsValidated = 0;
     byte select_index = 0;
     byte old_select_index = 0;
@@ -258,7 +192,8 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
 
     bool needLettersRefresh=true;
     bool needSelectorRefresh=true;
-    
+
+    // compute scrolling limits 
     if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE)
       bufferOffsetMax = 0; 
     else
@@ -269,6 +204,7 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
     else
       select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;
 
+    // Print text invite
     display.clearDisplay();
     display.setCursor(cursorX,0);
     display.print(invite);
@@ -278,35 +214,21 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
     for (int n=0; n<numChars; n++) {
       display.print(CODE_SLOT_CHAR);
     }
-    
-    // display the cursors pointing to the currently selected char
-    display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
-    display.print((char)31); // triangle pointing down
-    display.setCursor((select_index)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);
-    display.print((char)30); // triangle pointing up
 
-    // display rolling list of chars on third line
-    display.setCursor(0,CURSOR_Y_THIRD_LINE);
-
-    for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
-      char c = mlib.buffers[currentInputBufferLine][bufferOffset+i];
-      display.print(c);
-    }
-
-    // render
+    // render this initial state
     display.display();
-        
-    // Loop until required numChars characters are input by user
+       
+    // Scan buttons indefinitely until user has entered max nb of chars, or validated the answer
     while (1) {
 
-      check_buttons(BUTTON_REPEAT_TIME_VERYSLOW);
+      check_buttons();
 
-      // If validation was pushed, validate current char
-      if (justpressed[YButtonIndex]) {
-
-        if (currentInputBufferLine == mlib.nbBuffers - 1) 
+      // If finish button was pushed, exit
+      if (button_justpressed[StartButtonIndex]) {
           break;
-          
+      } 
+      // If user validated the currently selected character
+      else if (button_justpressed[YButtonIndex]) {         
         display.setCursor(cursorX,0);
         display.print(mlib.buffers[currentInputBufferLine][bufferOffset + select_index]);
         display.display();        
@@ -315,44 +237,47 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
         dst[nbCharsValidated] = (mlib.buffers[currentInputBufferLine][bufferOffset + select_index]);
         
         nbCharsValidated++;
+        // If we have reached max string size, we're done.
         if (nbCharsValidated == numChars)
           break;
       } 
-      else if (justpressed[LeftButtonIndex]) {
+      // Left/Right buttons allow to move character selector
+      else if (button_justpressed[RightButtonIndex] || button_held[RightButtonIndex]) {
         if (select_index < select_index_max)
         {
           old_select_index = select_index;
           select_index = select_index + 1;  
           needSelectorRefresh=true;          
-        }        
-      }
-      else if (held[LeftButtonIndex]) {
-        if (select_index < select_index_max)
-        {
-          old_select_index = select_index;
-          select_index = select_index + 1;  
-          needSelectorRefresh=true;          
-        }        
-      }      
-      else if (justpressed[RightButtonIndex]) {
+        } else {
+          if (bufferOffset < bufferOffsetMax) {
+            bufferOffset++;   
+            needLettersRefresh = true;   
+          }
+        }
+      }  
+      else if (button_justpressed[LeftButtonIndex] || button_held[LeftButtonIndex]) {
         if (select_index > 0)
         {
           old_select_index = select_index;
           select_index = select_index - 1;
           needSelectorRefresh=true;          
+        } else {
+          if (bufferOffset > 0) {
+            bufferOffset--;   
+            needLettersRefresh = true;   
+          }
         }
-      }
-      else if (held[RightButtonIndex]) {
-        if (select_index > 0)
-        {
-          old_select_index = select_index;
-          select_index = select_index - 1;
-          needSelectorRefresh=true;          
-        }
-      }      
-      else if (justpressed[UpButtonIndex] ) {
+      }  
+      // Up/Down buttons allow to change the currently displayed char set   
+      else if (button_justpressed[UpButtonIndex] || button_justpressed[DownButtonIndex]) {
         old_select_index = select_index;
-        currentInputBufferLine = mod(currentInputBufferLine-1,mlib.nbBuffers);
+        
+        if (button_justpressed[UpButtonIndex] ) {
+          currentInputBufferLine = mod(currentInputBufferLine-1,mlib.nbBuffers);
+        }
+        else if (button_justpressed[DownButtonIndex] ) {
+          currentInputBufferLine = mod(currentInputBufferLine+1,mlib.nbBuffers);
+        }
         
         if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE) {
           bufferOffsetMax = 0; 
@@ -364,31 +289,13 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
         }            
 
         if (select_index > select_index_max) select_index = select_index_max;
+        if (bufferOffset > bufferOffsetMax) bufferOffset = bufferOffsetMax;
              
         needLettersRefresh=true;
         needSelectorRefresh=true;    
       }
-      else if (justpressed[DownButtonIndex] ) {
 
-        old_select_index = select_index;
-        currentInputBufferLine = mod(currentInputBufferLine+1,mlib.nbBuffers);
-        
-        if (mlib.buffer_size[currentInputBufferLine] < SCREEN_MAX_NB_CHARS_PER_LINE) {
-          bufferOffsetMax = 0; 
-          select_index_max = mlib.buffer_size[currentInputBufferLine] - 1;          
-        }
-        else {
-          bufferOffsetMax = mlib.buffer_size[currentInputBufferLine] - SCREEN_MAX_NB_CHARS_PER_LINE;
-          select_index_max = SCREEN_MAX_NB_CHARS_PER_LINE-1;
-        }
-
-        if (select_index > select_index_max) select_index = select_index_max;
-        
-        needLettersRefresh=true;
-        needSelectorRefresh=true;     
-      }
-
-      // Render updated screen
+      // Render updated charset line, if updated
       if (needLettersRefresh) {    
         display.setCursor(0,CURSOR_Y_THIRD_LINE);
         for (int i=0; i<SCREEN_MAX_NB_CHARS_PER_LINE; i++) {
@@ -401,7 +308,7 @@ bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numC
         }
       }
       
-      // Render updated selectors
+      // Render updated selectors, if updated
       if (needSelectorRefresh) {
         // Overwrite previous selectors with blank char
         display.setCursor((old_select_index)*CHAR_XSIZE,CURSOR_Y_SECOND_LINE);
@@ -442,6 +349,7 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
   bool needMenuRefresh = true;
   bool needSelectorRefresh = true;
 
+  // compute scrolling limits
   if (nbEntries < SCREEN_MAX_NB_LINES) {
     menu_line_offset_max = 0;
     selector_line_index_max = nbEntries-1;    
@@ -452,15 +360,17 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
 
   display.clearDisplay();
 
+  // Scan buttons indefinitely until user selects a line
   while (1) {
 
-    check_buttons(BUTTON_REPEAT_TIME_FAST);
+    check_buttons();
 
     // If validation button was pushed, return currently selected entry
-    if (justpressed[YButtonIndex]) {
+    if (button_justpressed[YButtonIndex]) {
       return menu_line_offset + selector_line_index;
-    } 
-    else if (justpressed[UpButtonIndex]) {
+    }
+    // Up/Down buttons allow to scroll through the list 
+    else if (button_justpressed[UpButtonIndex] || button_held[UpButtonIndex]) {
       if (selector_line_index>0) {
         selector_line_index--;
         needSelectorRefresh = true;       
@@ -472,19 +382,7 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
         }
       }
     }
-    else if (held[UpButtonIndex]) {
-      if (selector_line_index>0) {
-        selector_line_index--;
-        needSelectorRefresh = true;       
-      }
-      else {
-        if (menu_line_offset>0) {
-          menu_line_offset--;
-          needMenuRefresh = true;
-        }
-      }
-    }    
-    else if (justpressed[DownButtonIndex]) {
+    else if (button_justpressed[DownButtonIndex] || button_held[DownButtonIndex]) {
       if (selector_line_index < selector_line_index_max) {
         selector_line_index++;
         needSelectorRefresh = true;
@@ -496,19 +394,8 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
         }
       }     
     }
-    else if (held[DownButtonIndex]) {
-      if (selector_line_index < selector_line_index_max) {
-        selector_line_index++;
-        needSelectorRefresh = true;
-      }
-      else {
-        if (menu_line_offset < menu_line_offset_max) {
-          menu_line_offset++;  
-          needMenuRefresh = true; 
-        }
-      }    
-    } 
-      
+
+    // redraw menu texts, if updated
     if (needMenuRefresh) {   
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
@@ -520,9 +407,31 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
           display.print(menuEntryText);         
           y+= CHAR_YSIZE;
         }
-      }      
-   }
+      } 
 
+      // If there are extra entries above screen upper limit, display an Up arrow in the upper right corner
+      if(menu_line_offset != 0) {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FIRST_LINE);      
+          display.print((char)24);       
+      }
+      // If there are no more extra entries above screen upper limit, delete Up arrow char
+      else {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FIRST_LINE);      
+          display.print(' ');       
+      }            
+      // If there are extra entries below screen lower limit, display a Down arrow in the lower right corner
+      if (menu_line_offset != menu_line_offset_max) {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);      
+          display.print((char)25);  
+      }
+      // If there are no extra entries below screen lower limit, delete arrow char
+      else {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);      
+          display.print(' ');  
+      }            
+   }
+   
+   // Redraw selectors, if they have moved
    if (needSelectorRefresh) {
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
@@ -544,6 +453,7 @@ int __attribute__ ((noinline)) generic_menu(int nbEntries, uint8_t** menutexts) 
       }
    }
 
+   // Send data to display
    if (needSelectorRefresh || needMenuRefresh) {
       display.display();
       if (needSelectorRefresh) needSelectorRefresh = false;
@@ -560,9 +470,9 @@ int __attribute__ ((noinline)) main_menu() {
   menutexts[1] =   (uint8_t*)&MENU_SETPWD;
   menutexts[2] =   (uint8_t*)&MENU_CLEARPWD;
   menutexts[3] =   (uint8_t*)&MENU_FORMAT;
-  menutexts[4] =   (uint8_t*)&MENU_DUMMY;
-  //return generic_menu(MAIN_MENU_NB_ENTRIES, menutexts);
-  return generic_menu(3, menutexts);
+  menutexts[4] =   (uint8_t*)&MENU_TEST1;
+  menutexts[5] =   (uint8_t*)&MENU_TEST2;  
+  return generic_menu(MAIN_MENU_NB_ENTRIES, menutexts);
 }
 
 int __attribute__ ((noinline)) menu_set_pwd() {
@@ -574,19 +484,28 @@ int __attribute__ ((noinline)) menu_set_pwd() {
 
 void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
 {
-  char pool[10+26+26];
+  char pool[13+10+26+26];
   int pool_index = 0;
-  
+
+  // "!" to "."
+  for( uint8_t idx = 33; idx < 47; idx++)
+  {
+    pool[pool_index++] = idx;
+  }
+
+  // "0" to "9"
   for( uint8_t idx = 48; idx < 58; idx++)
   {
     pool[pool_index++] = idx;
   }
-  
+
+  // "A" to "Z"
   for( uint8_t idx = 65; idx < 91; idx++)
   {
     pool[pool_index++] = idx;
   }
 
+  // "a" to "z"
   for( uint8_t idx = 97; idx < 123; idx++)
   {
     pool[pool_index++] = idx;
@@ -595,7 +514,7 @@ void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
   // pick from the pool of letters to fill password randomly
   for( uint8_t idx = 0; idx < len; idx++)
   {
-    dst[idx] = pool[(uint8_t)Entropy.random(10+26+25)];
+    dst[idx] = pool[(uint8_t)Entropy.random(13+10+26+25)];
   }
   dst[len]=0;
 }
@@ -608,6 +527,7 @@ void __attribute__ ((noinline)) generatePassword() {
 
   if( entryNum == NUM_ENTRIES ) {
     displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_FULL);
+    delay(MSG_DISPLAY_DELAY);
     return;
   } 
   else {
@@ -616,7 +536,7 @@ void __attribute__ ((noinline)) generatePassword() {
     char buf[16];
 
     MultilineInputBuffer mlib;
-    mlib.nbBuffers=5;
+    mlib.nbBuffers=4;
     mlib.buffers[0]= UpperCaseLetters;
     mlib.buffer_size[0] = strlen(mlib.buffers[0]);
     mlib.buffers[1]= LowerCaseLetters;
@@ -625,23 +545,22 @@ void __attribute__ ((noinline)) generatePassword() {
     mlib.buffer_size[2] = strlen(mlib.buffers[2]);
     mlib.buffers[3]= Numbers;
     mlib.buffer_size[3] = strlen(mlib.buffers[3]);
-    mlib.buffers[4]= Done;
-    mlib.buffer_size[4] = strlen(mlib.buffers[4]);    
-    
+
+    // Query user for entry Title
     getStringFromFlash(buf, (uint8_t*)&ACCOUNT_TITLE_INPUT);  
     getStringFromUser(entry.title, ACCOUNT_TITLE_LENGTH, buf, mlib);
 
+    // Query user for entry login
     getStringFromFlash(buf, (uint8_t*)&ACCOUNT_LOGIN_INPUT);
     getStringFromUser(entry.data, ACCOUNT_LOGIN_LENGTH, buf, mlib );
 
+    // Query user for desired pwd length
     do {
       getStringFromFlash(buf, (uint8_t*)&PASSWORD_LENGTH_INPUT);
 
-      mlib.nbBuffers=2;
+      mlib.nbBuffers=1;
       mlib.buffers[0]= Numbers;
       mlib.buffer_size[0] = strlen(mlib.buffers[0]);   
-      mlib.buffers[1]= Done;
-      mlib.buffer_size[1] = strlen(mlib.buffers[1]);
       
       getStringFromUser(len_string, 2, buf, mlib );
         
@@ -650,36 +569,17 @@ void __attribute__ ((noinline)) generatePassword() {
 
       if (len > PASSWORD_MAX_LENGTH){
             displayCenteredMessageFromStoredString((uint8_t*)&INVALID_VALUE);
+            delay(MSG_DISPLAY_DELAY);
       }
     } while(len > PASSWORD_MAX_LENGTH);
     
     putRandomChars( ((entry.data)+entry.passwordOffset),len);
-    //strcpy((entry.data)+entry.passwordOffset, "password");
 
     display.clearDisplay();    
 
     displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD);
-
-    /*
-    display.setCursor(0,CURSOR_Y_FIRST_LINE);
-    getStringFromFlash(buf, (uint8_t*)&STORING_NEW_PASSWORD);
-    display.print(buf);
-    
-    display.setCursor(0,CURSOR_Y_SECOND_LINE);
-    display.print(entry.title);
-
-    display.setCursor(0,CURSOR_Y_THIRD_LINE);      
-    display.print(entry.data);
-
-    display.setCursor(0,CURSOR_Y_FOURTH_LINE);    
-    for (int i=0; i < len; i++) {
-      char * c = (char*)(entry.data+entry.passwordOffset+i);
-      display.print(*c);
-    }
-
-    display.display();
-    */
-   
+    delay(MSG_DISPLAY_DELAY);
+  
     ES.putEntry( (uint8_t)entryNum, &entry );
   } 
 }
@@ -687,11 +587,10 @@ void __attribute__ ((noinline)) generatePassword() {
 void __attribute__ ((noinline)) inputPassword() {
   uint16_t entryNum = ES.getNextEmpty();
   entry_t entry;
-  char len_string[3];
-  int len;
 
   if( entryNum == NUM_ENTRIES ) {
     displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_FULL);
+    delay(MSG_DISPLAY_DELAY);
     return;
   } 
   else {
@@ -700,7 +599,7 @@ void __attribute__ ((noinline)) inputPassword() {
     char buf[16];
 
     MultilineInputBuffer mlib;
-    mlib.nbBuffers=5;
+    mlib.nbBuffers=4;
     mlib.buffers[0]= UpperCaseLetters;
     mlib.buffer_size[0] = strlen(mlib.buffers[0]);
     mlib.buffers[1]= LowerCaseLetters;
@@ -708,47 +607,30 @@ void __attribute__ ((noinline)) inputPassword() {
     mlib.buffers[2]= SpecialCharacters;
     mlib.buffer_size[2] = strlen(mlib.buffers[2]);
     mlib.buffers[3]= Numbers;
-    mlib.buffer_size[3] = strlen(mlib.buffers[3]);
-    mlib.buffers[4]= Done;
-    mlib.buffer_size[4] = strlen(mlib.buffers[4]);    
-        
+    mlib.buffer_size[3] = strlen(mlib.buffers[3]);  
+
+    // Query user for entry Title       
     getStringFromFlash(buf, (uint8_t*)&ACCOUNT_TITLE_INPUT);
     getStringFromUser(entry.title, ACCOUNT_TITLE_LENGTH, buf, mlib );
 
+    // Query user for entry login
     getStringFromFlash(buf, (uint8_t*)&ACCOUNT_LOGIN_INPUT);
     getStringFromUser(entry.data, ACCOUNT_LOGIN_LENGTH, buf, mlib );
-   
+
+    // Query user for entry pwd
     getStringFromFlash(buf, (uint8_t*)&PASSWORD_VALUE_INPUT);
     getStringFromUser((entry.data)+entry.passwordOffset, PASSWORD_MAX_LENGTH, buf, mlib );    
 
     display.clearDisplay();    
 
     displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD);
+    delay(MSG_DISPLAY_DELAY);
 
-    /*
-    display.setCursor(0,CURSOR_Y_FIRST_LINE);
-    getStringFromFlash(buf, (uint8_t*)&STORING_NEW_PASSWORD);
-    display.print(buf);
-    
-    display.setCursor(0,CURSOR_Y_SECOND_LINE);
-    display.print(entry.title);
-
-    display.setCursor(0,CURSOR_Y_THIRD_LINE);      
-    display.print(entry.data);
-
-    display.setCursor(0,CURSOR_Y_FOURTH_LINE);    
-    for (int i=0; i < len; i++) {
-      char * c = (char*)(entry.data+entry.passwordOffset+i);
-      display.print(*c);
-    }
-
-    display.display();
-    */
-   
     ES.putEntry( (uint8_t)entryNum, &entry );   
   } 
 }
 
+// Display a scrolling list of stored entries, and wait for user to select one
 int __attribute__ ((noinline)) pickEntry() {
 
   byte menu_line_offset= 0;
@@ -763,7 +645,8 @@ int __attribute__ ((noinline)) pickEntry() {
   uint8_t nbEntries=0;
   bool hasEntry=false;
   uint8_t maxEntryLength=0;
- 
+
+  // compute total number of entries
   do
   {
     hasEntry = ES.getTitle(entryNum, menuEntryText);
@@ -781,6 +664,9 @@ int __attribute__ ((noinline)) pickEntry() {
 
   nbEntries = entryNum;
 
+  if (nbEntries==0) return -1;
+
+  // compute scrolling limits
   if (nbEntries < SCREEN_MAX_NB_LINES) {
     menu_line_offset_max = 0;
     selector_line_index_max = nbEntries-1;   
@@ -791,15 +677,17 @@ int __attribute__ ((noinline)) pickEntry() {
 
   display.clearDisplay();
 
+  // Scan buttons indefinitely until user validates a selected item
   while (1) {
 
-    check_buttons(BUTTON_REPEAT_TIME_FAST);
+    check_buttons();
 
     // If validation button was pushed, return currently selected entry
-    if (justpressed[YButtonIndex]) {
+    if (button_justpressed[YButtonIndex]) {
           return menu_line_offset + selector_line_index;
     } 
-    else if (justpressed[UpButtonIndex]) {
+    // Up/Down buttons scroll through the list
+    else if (button_justpressed[UpButtonIndex] || button_held[UpButtonIndex]) {
       if (selector_line_index>0) {
         selector_line_index--;
         needSelectorRefresh = true;       
@@ -810,20 +698,8 @@ int __attribute__ ((noinline)) pickEntry() {
           needMenuRefresh = true;
         }
       }
-    }
-    else if (held[UpButtonIndex]) {
-      if (selector_line_index>0) {
-        selector_line_index--;
-        needSelectorRefresh = true;       
-      }
-      else {
-        if (menu_line_offset>0) {
-          menu_line_offset--;
-          needMenuRefresh = true;
-        }
-      }
-    }    
-    else if (justpressed[DownButtonIndex]) {
+    } 
+    else if (button_justpressed[DownButtonIndex] || button_held[DownButtonIndex]) {
       if (selector_line_index < selector_line_index_max) {
         selector_line_index++;
         needSelectorRefresh = true;
@@ -835,19 +711,8 @@ int __attribute__ ((noinline)) pickEntry() {
         }
       }     
     }
-    else if (held[DownButtonIndex]) {
-      if (selector_line_index < selector_line_index_max) {
-        selector_line_index++;
-        needSelectorRefresh = true;
-      }
-      else {
-        if (menu_line_offset < menu_line_offset_max) {
-          menu_line_offset++;  
-          needMenuRefresh = true; 
-        }
-      }    
-    } 
-      
+
+    // Render modified text entries if updated
     if (needMenuRefresh) {   
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
@@ -866,9 +731,31 @@ int __attribute__ ((noinline)) pickEntry() {
            }        
           y+= CHAR_YSIZE;
         }
-      }      
+      } 
+
+      // If there are extra entries above screen upper limit, display an Up arrow in the upper right corner
+      if(menu_line_offset != 0) {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FIRST_LINE);      
+          display.print((char)24);       
+      }
+      // If there are no more extra entries above screen upper limit, delete Up arrow char
+      else {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FIRST_LINE);      
+          display.print(' ');       
+      }            
+      // If there are extra entries below screen lower limit, display a Down arrow in the lower right corner
+      if (menu_line_offset != menu_line_offset_max) {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);      
+          display.print((char)25);  
+      }
+      // If there are no extra entries below screen lower limit, delete arrow char
+      else {
+          display.setCursor((SCREEN_MAX_NB_CHARS_PER_LINE-1)*CHAR_XSIZE,CURSOR_Y_FOURTH_LINE);      
+          display.print(' ');  
+      }        
    }
 
+   // Render updated selector chars, if they moved
    if (needSelectorRefresh) {
       int y = 0;
       for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
@@ -898,124 +785,6 @@ int __attribute__ ((noinline)) pickEntry() {
   } 
 }
 
-/*
-int __attribute__ ((noinline)) pickEntry() {
-
-  char eName[32];
-  uint8_t entryNum=0;
-  uint8_t nbEntries;
-  uint8_t maxEntryLength=0;
-  bool hasEntry=false;
- 
-  do
-  {
-    hasEntry = ES.getTitle(entryNum, eName);
-    if(hasEntry)
-    {
-      DEBUG(Serial.print("Entry ");)
-      DEBUG(Serial.print(entryNum);)
-      DEBUG(Serial.print(": ");)
-      DEBUG(Serial.println(eName);)
-      int len = strlen(eName);
-      if (len>maxEntryLength) maxEntryLength = len;
-      entryNum++;
-    }
-  } while (hasEntry);
-
-  nbEntries = entryNum;
-  //DEBUG(Serial.print("nbEntries=");Serial.println(nbEntries);)
-
-  if(nbEntries==0) return -1;
-
-  byte selected_index = 0;
-  byte display_line_index = 0;
-  char menuEntryText[32];
-  bool needRefresh = true;
-
-  display.clearDisplay();
- 
-  while (1) {
-
-    check_buttons(BUTTON_REPEAT_TIME_FAST);
-
-    // If knob switch was pushed, return currently selected entry
-    if (justpressed[YButtonIndex]) {
-        if (nbEntries > SCREEN_MAX_NB_LINES) {
-          return (mod(selected_index+display_line_index, nbEntries));
-        } else {
-          return selected_index;
-        }
-    } 
-    else if (justpressed[UpButtonIndex] || repeat[UpButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index+1,nbEntries);
-      } else {
-        if (selected_index<(nbEntries-1))
-          selected_index++;
-      }
-      if ((display_line_index<SCREEN_MAX_NB_LINES-1) && (display_line_index<nbEntries-1))
-        display_line_index++;
-      needRefresh = true;      
-    }
-    else if (justpressed[DownButtonIndex] || repeat[DownButtonIndex]) {
-      if (nbEntries > SCREEN_MAX_NB_LINES) {
-        selected_index = mod(selected_index-1,nbEntries);
-      } else {
-        if (selected_index>0)
-          selected_index--;
-      }
-      if (display_line_index>0)
-        display_line_index--;
-      needRefresh = true; 
-    }
-  
-   if (needRefresh) {
-    needRefresh = false;
-      int y = 0;
-      for (int i=0; i < SCREEN_MAX_NB_LINES; i++) {
-
-        if (i>= nbEntries) {
-          break;
-        } else {
-
-          if (nbEntries > SCREEN_MAX_NB_LINES) {
-            entryNum = mod(selected_index+i,nbEntries);
-            //getStringFromFlash(menuEntryText, menutexts[mod(selected_index+i,nbEntries)]);
-          } else {
-            entryNum = i;
-            //getStringFromFlash(menuEntryText, menutexts[i]);
-          }
-
-          ES.getTitle(entryNum, menuEntryText);
-          int entryLen = strlen(menuEntryText);
-          display.setCursor(0,y);
-        
-          if (i==display_line_index) {
-            display.print((char)16);
-            display.print(' ');
-            display.print(menuEntryText);
-          } else {
-            display.print("  ");
-            display.print(menuEntryText);
-          }
-
-          if (entryLen<maxEntryLength) {
-             for (int k=0;k<maxEntryLength-entryLen;k++){
-               display.print(' ');
-             }
-           }
-        
-          display.display();
-          y+= CHAR_YSIZE;
-        }
-      }        
-   }
-     
-   delay(1);
-  }
-  
-}
-*/
 ////////////////////
 // MISC
 ////////////////////
@@ -1040,13 +809,19 @@ void __attribute__ ((noinline)) format()
 
   memset( code1, 0, USERCODE_BUFF_LEN);
 
+  // Query desired code twice from user, verify both match to validate code.
   while(fail)
   {
-    getStringFromFlash(buf, (uint8_t*)&NEW_CODE_INVITE);
-    getCodeFromUser(code1, USERCODE_LENGTH, buf, '0', '9');
-    
+    MultilineInputBuffer mlib;
+    mlib.nbBuffers=1;
+    mlib.buffers[0]= Numbers;
+    mlib.buffer_size[0] = strlen(mlib.buffers[0]);
+        
+    getStringFromFlash(buf, (uint8_t*)&NEW_CODE_INVITE);  
+    getStringFromUser(code1, USERCODE_LENGTH, buf, mlib);
+       
     getStringFromFlash(buf, (uint8_t*)&REPEAT_CODE_INVITE);
-    getCodeFromUser(code2, USERCODE_LENGTH, buf, '0', '9');
+    getStringFromUser(code2, USERCODE_LENGTH, buf, mlib);
 
     if(memcmp(code1,code2,USERCODE_LENGTH)==0)
     {
@@ -1055,15 +830,17 @@ void __attribute__ ((noinline)) format()
     
     if(fail) {
       displayCenteredMessageFromStoredString((uint8_t*)&NEW_CODE_MISMATCH);
+      delay(MSG_DISPLAY_DELAY);
     }      
   }
   fail=1;
-  
+
+  // Query device name from user
   while(fail)
   {
     getStringFromFlash(buf, (uint8_t*)&NAME_INPUT);
     MultilineInputBuffer mlib;
-    mlib.nbBuffers=5;
+    mlib.nbBuffers=4;
     mlib.buffers[0]= UpperCaseLetters;
     mlib.buffer_size[0] = strlen(mlib.buffers[0]);
     mlib.buffers[1]= LowerCaseLetters;
@@ -1072,8 +849,6 @@ void __attribute__ ((noinline)) format()
     mlib.buffer_size[2] = strlen(mlib.buffers[2]);
     mlib.buffers[3]= Numbers;
     mlib.buffer_size[3] = strlen(mlib.buffers[3]);
-    mlib.buffers[4]= Done;
-    mlib.buffer_size[4] = strlen(mlib.buffers[4]);    
     
     if( getStringFromUser(user, DEVICENAME_LENGTH, buf, mlib ) )
     {
@@ -1093,21 +868,28 @@ bool __attribute__ ((noinline)) login()
   memset(key,0,USERCODE_BUFF_LEN+1);
   uint8_t ret=0;
 
+  // Request passcode from user
   getStringFromFlash(buf, (uint8_t*)&CODE_INVITE);
-  getCodeFromUser(key, USERCODE_LENGTH, buf, '0', '9');
-   
+
+  MultilineInputBuffer mlib;
+  mlib.nbBuffers=1;
+  mlib.buffers[0]= Numbers;
+  mlib.buffer_size[0] = strlen(mlib.buffers[0]);   
+ 
+  getStringFromUser(key, USERCODE_LENGTH, buf, mlib );
+
+  // Use provided code to unlock storage and proceed
   if(ES.unlock((byte*)key)) {
      ret=1;
      displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_GRANTED);
-      delay(500);
+      delay(MSG_DISPLAY_DELAY);
   } else {
      displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_DENIED);
-      delay(500);
+      delay(MSG_DISPLAY_DELAY);
   }
 
   return ret;
 }
-
 
 ////////////////////
 // INITIALISATION
@@ -1115,31 +897,23 @@ bool __attribute__ ((noinline)) login()
 void setup()   {  
 
   // Initialize stack canary
-  paintStack();
+  DEBUG(paintStack();)
     
   char devName[DEVNAME_BUFF_LEN];
   memset(devName,0,DEVNAME_BUFF_LEN);
 
-
-
-  //memset(buttonState,0,16*sizeof(int));
-  //memset(lastButtonState,0,16*sizeof(int));
-  //memset(lastDebounceTime,0,16*sizeof(long));
-
-  memset(pressed,0,NUMBUTTONS*sizeof(byte));
-  
-
+  // initialize button state
+  memset(button_pressed,0,NUMBUTTONS*sizeof(byte));
   
   // RN42 is configured by default to use 115200 bauds on UART links
   Serial.begin(115200);
-  //Serial.begin(9600);
         
-  //printSRAMMap();
+  DEBUG(printSRAMMap(););
 
+  DEBUG(
   int x = StackMarginWaterMark();
-  DEBUG(Serial.print("initial Watermark : "); Serial.println(x);)
-
-  //DEBUG(Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);)
+  Serial.print("initial Watermark : "); Serial.println(x);
+  Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);)
 
   Entropy.initialize();
   setRng();
@@ -1150,32 +924,24 @@ void setup()   {
   display.setTextSize(1);
   display.setTextColor(WHITE, BLACK);
   
-  // Setup the interrupt used for knob management
-  //pinMode(knobInterruptPin, INPUT_PULLUP);
-  //attachInterrupt(digitalPinToInterrupt(knobInterruptPin), uponKnobIT, FALLING);   
-
-  // Setup the pin used for knob management
-//  pinMode(knobSwitchPin, INPUT_PULLUP);
-
-  pinMode(UpButtonPin, INPUT_PULLUP);
-  pinMode(DownButtonPin, INPUT_PULLUP);
-  pinMode(LeftButtonPin, INPUT_PULLUP);
-  pinMode(RightButtonPin, INPUT_PULLUP);
-  pinMode(YButtonPin, INPUT_PULLUP);
-
+  // Setup input I/Os connected to buttons
+  for (byte i=0; i < NUMBUTTONS; i++) {
+    pinMode(buttons[i], INPUT_PULLUP);
+  }
 
   // debug feature to force reformatting
   //messUpEEPROMFormat();
 
+  // Check if the expected header is found in the EEPROM, else trig a format
   if(!ES.readHeader(devName)) {
     displayCenteredMessageFromStoredString((uint8_t*)&NEED_FORMAT);
-    delay(1000);
+    delay(MSG_DISPLAY_DELAY);
     format();
   } else {
-    char buf[48];
+    char buf[DEVICENAME_LENGTH+11];
     sprintf(buf, "BLUEKEY (%s)", devName);
     displayCenteredMessage(buf);
-    delay(500);
+    delay(MSG_DISPLAY_DELAY);
   }
   
   // Login now
@@ -1185,10 +951,29 @@ void setup()   {
   } while (login_status==false);
 }
 
+void testFunction1() {
+
+  display.clearDisplay();
+  display.setCursor(0,0);
+  // 24 UP
+  // 25 DOWN
+  // 26 RIGHT
+  // 27 LEFT
+  for (char c=24; c<28; c++) {
+    display.print((char)c);
+  }
+  display.display();
+
+  delay(5000);
+}
+
+void testFunction2() {
+
+}
+
 ////////////////////
 // MAIN LOOP
 ////////////////////
-static long loopidx=0;
 void loop() {
 
   int entry_choice;
@@ -1205,6 +990,7 @@ void loop() {
         ES.getEntry(entry_choice, &temp);
         DEBUG(Serial.print("password for this entry:");)
         
+        // This is where the critical step happens: send the decoded password over the serial link (to Bluetooth or wired keyboard interface)
         // Send password to Serial TX line (hence to Bluetooth module)
         Serial.print(temp.data+temp.passwordOffset);
       } else
@@ -1215,7 +1001,7 @@ void loop() {
       entry_choice = menu_set_pwd();
       switch (entry_choice) {
         case 0:
-          // GENERATE
+          // GENERATED
           generatePassword();
           break;
         case 1:
@@ -1223,17 +1009,24 @@ void loop() {
           inputPassword();         
           break;
       }
-      Serial.print("Menu_set_pwd returned "); Serial.println(entry_choice);
       break;
     case 2:
       // CLEAR_PWD
       entry_choice = pickEntry();
-      if (confirmChoice("del entry?")) ES.delEntry(entry_choice);
+      if (confirmChoice((char*)"del entry?")) ES.delEntry(entry_choice);
       break;
     case 3:
       // FORMAT
-      if (confirmChoice("Sure?")) format();
+      if (confirmChoice((char*)"Sure?")) format();
       break;
+    case 4:
+      // TEST
+      testFunction1();
+      break;      
+    case 5:
+      // TEST
+      testFunction2();
+      break; 
   }
 
   DEBUG(

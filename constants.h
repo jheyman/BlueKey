@@ -17,19 +17,19 @@
 #define DownButtonPin 5
 #define DownButtonIndex 1
 
-#define LeftButtonPin 2
+#define LeftButtonPin 4
 #define LeftButtonIndex 2
 
-#define RightButtonPin 4
+#define RightButtonPin 2
 #define RightButtonIndex 3
 
 #define YButtonPin 6
 #define YButtonIndex 4
 
+#define StartButtonPin 7
+#define StartButtonIndex 5
+
 #define DEBOUNCE_TIME 10 //ms
-#define BUTTON_REPEAT_TIME_VERYSLOW 500 //ms
-#define BUTTON_REPEAT_TIME_SLOW 100 //ms
-#define BUTTON_REPEAT_TIME_FAST 0 //ms
 #define BUTTON_HOLD_TIME 300 //ms
 
 #define debounceDelay 50
@@ -61,6 +61,8 @@
 
 #define ACCOUNT_TITLE_LENGTH 12
 #define ACCOUNT_LOGIN_LENGTH 12
+
+#define MSG_DISPLAY_DELAY 1000
 
 typedef struct {
   char* buffers[5]; 
