@@ -7,27 +7,59 @@
 #define EEPROM_I2C_ADDR 0x50
 #define EEPROM_TEST_OFFSET 1280
 
+#ifdef BLUEKEY_KNOB
 #define knobInterruptPin 3
 #define knobDataPin 12
 #define knobSwitchPin 2
+#endif
 
-#define UpButtonPin 3
+#ifdef BLUEKEY_SNES
+
+
+
+#define UpButtonPin 4
 #define UpButtonIndex 0
 
-#define DownButtonPin 5
+#define DownButtonPin A1
 #define DownButtonIndex 1
 
-#define LeftButtonPin 4
+#define LeftButtonPin 3
 #define LeftButtonIndex 2
 
-#define RightButtonPin 2
+#define RightButtonPin 5
 #define RightButtonIndex 3
 
-#define YButtonPin 6
-#define YButtonIndex 4
 
-#define StartButtonPin 7
-#define StartButtonIndex 5
+#define XButtonPin 9
+#define XButtonIndex 4
+
+#define YButtonPin 12
+#define YButtonIndex 5
+
+#define AButtonPin 10
+#define AButtonIndex 6
+
+#define BButtonPin 11
+#define BButtonIndex 7
+
+
+#define StartButtonPin 13
+#define StartButtonIndex 8
+
+#define SelectButtonPin A0
+#define SelectButtonIndex 9
+
+
+#define SideLeftButtonPin 6
+#define SideLeftButtonIndex 10
+
+#define SideRightButtonPin 7
+#define SideRightButtonIndex 11
+
+#endif
+
+#define BT_connected_pin 8
+
 
 #define DEBOUNCE_TIME 10 //ms
 #define BUTTON_HOLD_TIME 300 //ms

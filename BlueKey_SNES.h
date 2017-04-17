@@ -54,7 +54,7 @@ const static char MENU_SETPWD_GENERATE_LENGTH[] PROGMEM      = "Length?";
 // Gamepad buttons management //
 ////////////////////////////////
 
-byte buttons[] = {UpButtonPin, DownButtonPin, LeftButtonPin, RightButtonPin, YButtonPin, StartButtonPin};
+byte buttons[] = {UpButtonPin, DownButtonPin, LeftButtonPin, RightButtonPin, XButtonPin, YButtonPin, AButtonPin, BButtonPin, StartButtonPin, SelectButtonPin, SideLeftButtonPin, SideRightButtonPin };
 #define NUMBUTTONS sizeof(buttons)
 boolean button_pressed[NUMBUTTONS], button_justpressed[NUMBUTTONS], button_held[NUMBUTTONS];
 
@@ -891,6 +891,64 @@ bool __attribute__ ((noinline)) login()
   return ret;
 }
 
+void testButtons() {
+  bool needRefresh=true;
+   display.clearDisplay();
+
+  // Scan buttons indefinitely until user selects a line
+  while (1) {
+
+   check_buttons();
+
+    for (byte i=0; i < NUMBUTTONS; i++) {
+      bool pushed = button_pressed[i];
+      
+      if (pushed) {
+        needRefresh = true;
+        display.setCursor(0,0);
+        display.print("           ");
+        display.setCursor(0,0);
+        switch(i) {
+          case 0:
+            display.print("Up"); 
+            break;
+          case 1:
+            display.print("Down"); break;
+          case 2:
+            display.print("Left"); break;
+          case 3:
+            display.print("Right"); break;
+          case 4:
+            display.print("X"); break;
+          case 5:
+            display.print("Y"); break;
+          case 6:
+            display.print("A"); break;
+          case 7:
+            display.print("B"); break;            
+          case 8:
+            display.print("Start"); break;
+          case 9:
+            display.print("Select"); break;
+          case 10:
+            display.print("SideL"); break;
+          case 11:
+            display.print("SideR"); break;
+          default:
+            break;                                                                                                  
+        }
+      } 
+    }
+
+   if (needRefresh) {
+      needRefresh=false;
+    display.display();
+   }
+        
+   delay(1);
+  }
+}
+
 ////////////////////
 // INITIALISATION
 ////////////////////
@@ -916,10 +974,12 @@ void setup()   {
   Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);)
 
   Entropy.initialize();
-  setRng();
+  //setRng();
   
   // Initialize OLED display
   display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_I2C_ADDR);
+  display.ssd1306_command(SSD1306_SEGREMAP );
+  display.ssd1306_command(SSD1306_COMSCANINC);
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE, BLACK);
@@ -929,8 +989,12 @@ void setup()   {
     pinMode(buttons[i], INPUT_PULLUP);
   }
 
+  pinMode(BT_connected_pin, INPUT_PULLUP);
+
   // debug feature to force reformatting
   //messUpEEPROMFormat();
+
+  //testButtons();
 
   // Check if the expected header is found in the EEPROM, else trig a format
   if(!ES.readHeader(devName)) {
@@ -968,8 +1032,9 @@ void testFunction1() {
 }
 
 void testFunction2() {
-
+  Serial.print("S~,6\n");
 }
+
 
 ////////////////////
 // MAIN LOOP

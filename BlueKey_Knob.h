@@ -849,6 +849,8 @@ void setup()   {
   
   // Initialize OLED display
   display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_I2C_ADDR);
+  display.ssd1306_command(SSD1306_SEGREMAP );
+  display.ssd1306_command(SSD1306_COMSCANINC);
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE, BLACK);
