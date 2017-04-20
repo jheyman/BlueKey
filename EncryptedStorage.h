@@ -45,6 +45,7 @@ public:
   void lock();
   bool getTitle( uint8_t entryNum, char* title); //Only decrypts the name (for speed)
   bool getEntry( uint8_t entryNum, entry_t* entry ); //Reads and decrypts an entry, return true if entry is valid, otherswise entry is empty.
+  uint8_t getNthValidEntryIndex(uint8_t N); // get index of Nth valid entry
   void putEntry( uint8_t entryNum, entry_t* entry ); //Encrypts and Writes an entry.
   void changePass( byte* newKey, byte* oldPass );
   void delEntry ( uint8_t entryNum ); //Deletes an entry

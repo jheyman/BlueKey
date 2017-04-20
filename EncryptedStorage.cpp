@@ -206,6 +206,33 @@ bool __attribute__ ((noinline)) EncryptedStorage::getEntry( uint8_t entryNum, en
   return(TRUE);
 }
 
+
+uint8_t __attribute__ ((noinline)) EncryptedStorage::getNthValidEntryIndex(uint8_t N)
+{
+  uint8_t entryIdx=0;
+  uint8_t foundEntries=0;
+  bool hasEntry=false;
+  char menuEntryText[32];
+
+  do
+  {
+    hasEntry = ES.getTitle(entryIdx, menuEntryText);
+    if(hasEntry)
+    {
+      if (foundEntries==N) {
+        return entryIdx;
+      }
+      foundEntries++;
+    }
+    entryIdx++;
+  } while (entryIdx<NUM_ENTRIES);
+
+  return -1;
+}
+
+  
+
+
 void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, entry_t* entry )
 {
   uint16_t offset = entryOffset(entryNum);
@@ -216,7 +243,7 @@ void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, en
   
   //Write IV
   offset=I2E_Write( offset , iv, EEPROM_IV_LENGTH );
-  
+ 
   //Encrypt entry
   aes.cbc_encrypt((byte*)entry,(byte*)entry, ENTRY_FULL_CBC_BLOCKS, iv);
 

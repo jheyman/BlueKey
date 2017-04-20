@@ -60,16 +60,13 @@ byte __attribute__ ((noinline)) getStringFromFlash(char* buffer, uint8_t* stored
 
 void testEEPROM(int index) {
 
-  byte writeBuffer[32];
-  sprintf((char*)writeBuffer, (char*)F("Write test in EEPROM %d"), index);
-
   byte readbackBuffer[32];
   strcpy((char*)readbackBuffer, (char*)F("xxxxxxxx"));
   
   uint16_t offset = 0; 
-  offset=I2E_Write(EEPROM_TEST_OFFSET, writeBuffer, 224 );
-
-  I2E_Read(EEPROM_TEST_OFFSET, readbackBuffer, 224);
+  offset = I2E_Write( EEPROM_TEST_OFFSET,(byte*)"test4", 224 );
+  
+  I2E_Read(EEPROM_TEST_OFFSET, (byte*)readbackBuffer, 32);
 
    display.clearDisplay();
    display.setCursor(0,0);

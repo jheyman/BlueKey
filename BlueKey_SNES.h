@@ -484,10 +484,11 @@ int __attribute__ ((noinline)) menu_set_pwd() {
 
 void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
 {
-  char pool[13+10+26+26];
+  char pool[14+10+26+26];
   int pool_index = 0;
 
   // "!" to "."
+  
   for( uint8_t idx = 33; idx < 47; idx++)
   {
     pool[pool_index++] = idx;
@@ -498,6 +499,7 @@ void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
   {
     pool[pool_index++] = idx;
   }
+  
 
   // "A" to "Z"
   for( uint8_t idx = 65; idx < 91; idx++)
@@ -511,10 +513,13 @@ void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
     pool[pool_index++] = idx;
   }  
 
+//Serial.print("len=");
+//Serial.println(len);
+
   // pick from the pool of letters to fill password randomly
   for( uint8_t idx = 0; idx < len; idx++)
   {
-    dst[idx] = pool[(uint8_t)Entropy.random(13+10+26+25)];
+    dst[idx] = pool[(uint8_t)Entropy.random(13+10+26+26)];
   }
   dst[len]=0;
 }
@@ -573,8 +578,9 @@ void __attribute__ ((noinline)) generatePassword() {
       }
     } while(len > PASSWORD_MAX_LENGTH);
     
+    //Serial.print("pwd Length:"); Serial.println(len);
     putRandomChars( ((entry.data)+entry.passwordOffset),len);
-
+    
     display.clearDisplay();    
 
     displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD);
@@ -641,28 +647,29 @@ int __attribute__ ((noinline)) pickEntry() {
   bool needMenuRefresh = true;
   bool needSelectorRefresh = true;
 
-  uint8_t entryNum=0;
   uint8_t nbEntries=0;
+  uint8_t entryIdx=0;
   bool hasEntry=false;
   uint8_t maxEntryLength=0;
 
   // compute total number of entries
   do
   {
-    hasEntry = ES.getTitle(entryNum, menuEntryText);
+    hasEntry = ES.getTitle(entryIdx, menuEntryText);
     if(hasEntry)
     {
       DEBUG(Serial.print("Entry ");)
-      DEBUG(Serial.print(entryNum);)
+      DEBUG(Serial.print(entryIdx);)
       DEBUG(Serial.print(": ");)
       DEBUG(Serial.println(menuEntryText);)
+     
       int len = strlen(menuEntryText);
       if (len>maxEntryLength) maxEntryLength = len;
-      entryNum++;
-    }
-  } while (hasEntry);
+      nbEntries++;
+    } 
 
-  nbEntries = entryNum;
+    entryIdx++;
+  } while (entryIdx<NUM_ENTRIES);
 
   if (nbEntries==0) return -1;
 
@@ -684,7 +691,7 @@ int __attribute__ ((noinline)) pickEntry() {
 
     // If validation button was pushed, return currently selected entry
     if (button_justpressed[YButtonIndex]) {
-          return menu_line_offset + selector_line_index;
+          return ES.getNthValidEntryIndex(menu_line_offset + selector_line_index);
     } 
     // Up/Down buttons scroll through the list
     else if (button_justpressed[UpButtonIndex] || button_held[UpButtonIndex]) {
@@ -720,7 +727,7 @@ int __attribute__ ((noinline)) pickEntry() {
           break;
         } else {
 
-          ES.getTitle(menu_line_offset+i, menuEntryText);
+          ES.getTitle(ES.getNthValidEntryIndex(menu_line_offset+i), menuEntryText);
           int entryLen = strlen(menuEntryText);
           display.setCursor(2*CHAR_XSIZE,y);
           display.print(menuEntryText);
@@ -974,7 +981,7 @@ void setup()   {
   Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);)
 
   Entropy.initialize();
-  //setRng();
+  setRng();
   
   // Initialize OLED display
   display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_I2C_ADDR);
@@ -989,11 +996,8 @@ void setup()   {
     pinMode(buttons[i], INPUT_PULLUP);
   }
 
-  pinMode(BT_connected_pin, INPUT_PULLUP);
-
   // debug feature to force reformatting
   //messUpEEPROMFormat();
-
   //testButtons();
 
   // Check if the expected header is found in the EEPROM, else trig a format
@@ -1032,7 +1036,9 @@ void testFunction1() {
 }
 
 void testFunction2() {
-  Serial.print("S~,6\n");
+  testEEPROM(0);
+  delay(5000);
+  //Serial.print("S~,6\n");
 }
 
 
@@ -1058,8 +1064,10 @@ void loop() {
         // This is where the critical step happens: send the decoded password over the serial link (to Bluetooth or wired keyboard interface)
         // Send password to Serial TX line (hence to Bluetooth module)
         Serial.print(temp.data+temp.passwordOffset);
-      } else
-            displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
+      } else {
+        displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
+        delay(MSG_DISPLAY_DELAY);
+      }
       break;
     case 1:
       // SET_PWD              
@@ -1078,7 +1086,14 @@ void loop() {
     case 2:
       // CLEAR_PWD
       entry_choice = pickEntry();
-      if (confirmChoice((char*)"del entry?")) ES.delEntry(entry_choice);
+      Serial.print("clear entry "); Serial.println(entry_choice);
+      if (entry_choice != -1) {
+        if (confirmChoice((char*)"del entry?")) 
+          ES.delEntry(entry_choice);
+      } else {
+        displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
+        delay(MSG_DISPLAY_DELAY);
+      }
       break;
     case 3:
       // FORMAT
