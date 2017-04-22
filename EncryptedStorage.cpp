@@ -73,10 +73,122 @@ const static char eepromIdentifierTxt[HEADER_EEPROM_IDENTIFIER_LEN] PROGMEM  =  
 #define headerIdentifierOffsetAndIv(iv) I2E_Read( EEPROM_IV_LOCATION, iv, EEPROM_IV_LENGTH )
 #define entryOffset( entryNum ) ((EEPROM_ENTRY_START_ADDR)+(EEPROM_ENTRY_DISTANCE*entryNum))
 
+uint8_t EncryptedStorage::getNbEntries()
+{
+  return nbEntries;
+}
+
+uint8_t EncryptedStorage::getMaxTitleLength() 
+{
+  uint8_t maxTitleLength=0;
+  uint8_t titleLength=0;
+  char tmp[32];
+  
+  for (int k = 0; k < nbEntries; k++)
+  {
+    ES.getTitle(mappingBuffer[k], tmp);
+    titleLength = strlen(tmp);
+    if (titleLength > maxTitleLength) maxTitleLength = titleLength;
+  }
+
+  return maxTitleLength;
+}
+
+void __attribute__ ((noinline)) EncryptedStorage::refreshMapping() 
+{
+  int8_t entryIdx=0;
+  uint8_t mappingIdx=0;
+  uint8_t foundEntries=0;
+  bool validEntry=false;
+  char entryTitle[32];
+  char tmp[32];
+
+  unsigned long StartTime = millis();
+  
+  // Initialize mappingBuffer with invalid indexes
+  for (mappingIdx = 0; mappingIdx <NUM_ENTRIES; mappingIdx++)
+  {
+    mappingBuffer[mappingIdx] = -1;
+  }
+
+  // initialize nbEntries
+  nbEntries = 0;
+  
+  // read all EEPROM entries and fill mappingBuffer with valid entries indexes, sorted alphabetically
+  for (entryIdx = 0; entryIdx <NUM_ENTRIES; entryIdx++)
+  {
+    validEntry = ES.getTitle(entryIdx, entryTitle);
+    
+    if(validEntry)
+    {
+
+    //Serial.print("find spot for "); 
+    //Serial.print(entryIdx);
+    //Serial.print(' '); 
+    //ES.getTitle(mappingBuffer[mappingIdx], tmp); 
+    //Serial.println(tmp);
+
+    
+        // insert entry at the correct position in the buffer to preserve alphabetical order, shifting other entries as needed
+        for (int k=0; k<NUM_ENTRIES; k++) 
+        {
+            // if we have reached an empty slot in the buffer, just fill it now.
+            if (mappingBuffer[k] == -1) {
+              mappingBuffer[k] = entryIdx;
+              //Serial.print("copy at "); 
+              //Serial.println(k);
+              break;
+            }
+            // else check if our new entry is before or after in the alphabetical sort
+            else {
+              ES.getTitle(mappingBuffer[k], tmp);
+              if (strcmp(entryTitle, tmp) < 0)
+              {
+
+                 //Serial.print("shft frm "); 
+                 //Serial.println(k);
+    
+                // shift all values from k to END by one slot
+                for (int p=nbEntries-1; p>=k; p--) {
+                  mappingBuffer[p+1] = mappingBuffer[p];
+                }
+                
+                // and insert new value
+                mappingBuffer[k] = entryIdx;
+                break;
+              }
+            }
+        }  
+        nbEntries++;
+/*
+  Serial.print("entries: "); Serial.println(nbEntries);
+  
+  for (mappingIdx = 0; mappingIdx <NUM_ENTRIES; mappingIdx++)
+  {
+    if (mappingBuffer[mappingIdx] != -1) {
+    Serial.print(mappingIdx);
+    Serial.print(": ");
+    Serial.print(mappingBuffer[mappingIdx]);
+    Serial.print(", ");
+    if (ES.getTitle(mappingBuffer[mappingIdx], tmp)) 
+      Serial.println(tmp);
+    else
+      Serial.println("empty");
+    }
+  }
+Serial.println("---");
+*/
+          
+    }
+  }
+  unsigned long CurrentTime = millis(); 
+  unsigned long ElapsedTime = CurrentTime - StartTime;
+  Serial.print("refreshMap:"); Serial.println(ElapsedTime); 
+}
+
 bool __attribute__ ((noinline)) EncryptedStorage::readHeader(char* deviceName)
 {
   byte buf[HEADER_EEPROM_IDENTIFIER_LEN];
-  bool ret = TRUE;
   
   I2E_Read(0, buf, HEADER_EEPROM_IDENTIFIER_LEN);
 
@@ -91,11 +203,6 @@ bool __attribute__ ((noinline)) EncryptedStorage::readHeader(char* deviceName)
   I2E_Read(EEPROM_DEVICENAME_LOCATION, (byte*)deviceName, EEPROM_DEVICENAME_LENGTH);
 
   return(TRUE);
-}
-
-void __attribute__ ((noinline)) EncryptedStorage::setBanner(char* banner)
-{
-  I2E_Write( EEPROM_DEVICENAME_LOCATION,(byte*)banner, EEPROM_DEVICENAME_LENGTH );
 }
 
 bool __attribute__ ((noinline)) EncryptedStorage::unlock( byte* k )
@@ -206,33 +313,11 @@ bool __attribute__ ((noinline)) EncryptedStorage::getEntry( uint8_t entryNum, en
   return(TRUE);
 }
 
-
-uint8_t __attribute__ ((noinline)) EncryptedStorage::getNthValidEntryIndex(uint8_t N)
+uint8_t EncryptedStorage::getNthValidEntryIndex(uint8_t N)
 {
-  uint8_t entryIdx=0;
-  uint8_t foundEntries=0;
-  bool hasEntry=false;
-  char menuEntryText[32];
-
-  do
-  {
-    hasEntry = ES.getTitle(entryIdx, menuEntryText);
-    if(hasEntry)
-    {
-      if (foundEntries==N) {
-        return entryIdx;
-      }
-      foundEntries++;
-    }
-    entryIdx++;
-  } while (entryIdx<NUM_ENTRIES);
-
-  return -1;
+  return mappingBuffer[N];
 }
-
   
-
-
 void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, entry_t* entry )
 {
   uint16_t offset = entryOffset(entryNum);
@@ -249,17 +334,17 @@ void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, en
 
   //Write entry
   I2E_Write( offset,(byte*)entry,  ENTRY_SIZE );
+
+  refreshMapping();
 }
 
-void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
+void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum, bool refresh)
 {
   uint16_t offset = entryOffset(entryNum);
   entry_t dat;
-  //entry_t dat2;
   
   memset(&dat,0,EEPROM_IV_LENGTH); //Zero out first 16 bytes of entry so we can write an all zero iv.  
   //Write an all zero iv to indicate it's empty
- // Serial.print("\r\nEntry num: "); Serial.print(entryNum);Serial.print(" iv offset before ");Serial.print(offset);
   offset = I2E_Write( offset, (byte*)&dat, EEPROM_IV_LENGTH );
   
   //Fill entry with random numbers
@@ -270,52 +355,8 @@ void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
   
   //Write random data
   I2E_Write( offset, (byte*)&dat, ENTRY_SIZE );
-  //Read it back
-  //I2E_Read( offset, (byte*)&dat2, ENTRY_SIZE );
-  
-  //Compare, to see that we read what we wrote
-  //if( memcmp( &dat, &dat2, ENTRY_SIZE ) !=  0 )
-  //{
-   //  strcpy( dat.title, "[Bad]" );
-  //   dat.passwordOffset=0;
-  //   putEntry( entryNum, &dat );
-  //}  
-}
 
-void __attribute__ ((noinline)) EncryptedStorage::changePass( byte* newPass, byte* oldPass )
-{
-  byte obck[32];
-  entry_t entry;
-
-  //Note: oldPass was or'ed with background noise by unlock
-//  debugPrint((char*)F("Changing password..."));
-  //putPass will xor the background noise into our newPass, so it's ready to use for encryption.
-  putPass(newPass);
-
-  // For each non-empty entry
-  for(uint16_t i = 0; i < NUM_ENTRIES; i++ )
-  {
-   //Serial.write('\r');txt(i);Serial.write('/');txt(255);
-    if( getTitle( (uint8_t)i, (char*)obck ) )
-    {
-      //Set old key
-      aes.set_key( oldPass, 256 );
-      
-      //Read entry
-      getEntry( (uint8_t)i, &entry );
-
-      //Set new key
-      aes.set_key( newPass, 256 );
-
-      //Write entry
-      putEntry( (uint8_t)i, &entry );
-    }
-  }
-
-  //Clean up a bit
-  memset( newPass, 0, 32 );
-  memset( oldPass, 0, 32 );
-  memset( &entry, 0, sizeof(entry) ); 
+  if (refresh) refreshMapping();
 }
 
 void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name )
@@ -326,7 +367,7 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
   {
     //Serial.write('\n');txt(i);Serial.write('/');txt(NUM_ENTRIES);
     char tmp[24];
-    delEntry((uint8_t)i);
+    delEntry((uint8_t)i, false);
     sprintf(tmp, "Formatting: %d/%d", i+1, NUM_ENTRIES);
     displayCenteredMessage(tmp);    
   }
@@ -344,6 +385,13 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
   I2E_Write( EEPROM_DEVICENAME_LOCATION,(byte*)name, EEPROM_DEVICENAME_LENGTH );
 
   //Serial.print("device name written:"); Serial.println(name);
+
+  nbEntries = 0;  
+  
+  for(uint8_t k=0; k < NUM_ENTRIES; k++ )
+  {
+     mappingBuffer[k] = -1;
+  }
 }
 
 //Find used and all 0  IV's so we can avoid them (0 avoided because we use it for detecting empty entry)
@@ -449,59 +497,6 @@ uint8_t EncryptedStorage::crc8(const uint8_t *addr, uint8_t len)
   return crc;
 }
 
-/*
-//R = Ready, W = Wait, C =CRC error, O = OK, F = Failure, E=End
-void __attribute__ ((noinline)) EncryptedStorage::importData()
-{
-  char buf[32];
-  uint16_t i=0;
-  uint8_t crca, crcb;
-  Serial.setTimeout(30000);
-  while( i < 64000 )
-  {
-    txt("R");
-    if( Serial.readBytes(buf,32) == 32 )
-    {
-      crcb = Serial.read();
-      txt("W");
-      crca = crc8((uint8_t*)buf,32);
-      if( crca != crcb )
-      {
-	I2E_Write( 0, (byte*)"C", 1 );
-	txt("C");
-	while(1) {};
-      } else {
-	txt("O");
-      }
-      I2E_Write(i, (byte*)buf, 32);
-      i+=32;
-    } else {
-      I2E_Write( 0, (byte*)"F", 1 );
-      txt("F");
-      break;
-    }
-  }
-  txt("E");
-}
-
-void __attribute__ ((noinline)) EncryptedStorage::exportData()
-{
-  byte buf[32];
-  uint8_t crc;
- // debugPrint((char*)"exportData...");
-  for(uint16_t i=0; i < 64000; i+=32)
-  {
-    I2E_Read( i, buf, 32 );
-    for( int ii=0; ii < 32; ii++)
-    {
-      Serial.write((char)buf[ii]);
-    }
-    crc = crc8( (uint8_t*)buf, 32 );
-    Serial.write( (char)crc );
-  }
-//  debugPrint((char*)"exportData DONE");
-}
-*/
 uint16_t __attribute__ ((noinline)) EncryptedStorage::getNextEmpty()
 {
   uint8_t iv[EEPROM_IV_LENGTH];
@@ -526,19 +521,6 @@ uint16_t __attribute__ ((noinline)) EncryptedStorage::getNextEmpty()
   }
   
   return( idx );
-}
-
-void __attribute__ ((noinline)) EncryptedStorage::setKeyboardLayout(uint8_t lang)
-{
-  byte buf = (byte)lang;
-  I2E_Write(EEPROM_KEYBOARD_LAYOUT_LOCATION, &buf, EEPROM_KEYBOARD_LAYOUT_LENGTH);  
-}
-
-uint8_t __attribute__ ((noinline)) EncryptedStorage::getKeyboardLayout()
-{
-  byte buf;
-  I2E_Read(EEPROM_KEYBOARD_LAYOUT_LOCATION, &buf, EEPROM_KEYBOARD_LAYOUT_LENGTH); 
-  return( (uint8_t)buf);
 }
 
 EncryptedStorage ES = EncryptedStorage();

@@ -28,13 +28,12 @@
 
 typedef struct {
   char title[ENTRY_TITLE_SIZE]; // Title needs to be two blocks for seperate decryption
-  uint8_t seperator;		//Character to type between user and pass (ignored when macro)
-  uint8_t passwordOffset;	//Where the password starts in the string of data (0 = macro)
+  uint8_t passwordOffset;	//Where the password starts in the string of data 
   //char data[190];
-  char data[78];
+  char data[79];
 } entry_t;
 
-#define NUM_ENTRIES 16
+#define NUM_ENTRIES 64
 
 class EncryptedStorage
 {
@@ -47,19 +46,18 @@ public:
   bool getEntry( uint8_t entryNum, entry_t* entry ); //Reads and decrypts an entry, return true if entry is valid, otherswise entry is empty.
   uint8_t getNthValidEntryIndex(uint8_t N); // get index of Nth valid entry
   void putEntry( uint8_t entryNum, entry_t* entry ); //Encrypts and Writes an entry.
-  void changePass( byte* newKey, byte* oldPass );
-  void delEntry ( uint8_t entryNum ); //Deletes an entry
+  void delEntry ( uint8_t entryNum, bool refresh); //Deletes an entry
   void format( byte* pass, char* name ); //A 32 byte key and a 32 byte name
-  void setBanner(char* banner);
-  //void exportData();
-  //void importData();
   uint16_t getNextEmpty();
-  void setKeyboardLayout(uint8_t lang);
-  uint8_t getKeyboardLayout();
+  uint8_t getNbEntries();
+  uint8_t getMaxTitleLength();
+  void refreshMapping();
 private:
   void putPass( byte* pass );
   void putIv( byte* dst );
   AES aes;
+  int8_t mappingBuffer[NUM_ENTRIES];
+  uint8_t nbEntries;
   uint8_t crc8(const uint8_t *addr, uint8_t len);  
 };
 

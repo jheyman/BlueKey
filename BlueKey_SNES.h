@@ -36,12 +36,13 @@ const static char STORING_NEW_PASSWORD[] PROGMEM = "Storing...";
 // max 21 characters per line, minus left triangle cursor and one space at the beginning, and one char for arrow cursors on the right  => max 18 chars max per line, including starting and trailing space
 // also, to avoid to explicitly clear the display, make all entries the same size so that all text gets overwritten.
                                          // "<-----MAX------>";
-const static char MENU_GETPWD[] PROGMEM   = "Get Password  ";
-const static char MENU_SETPWD[] PROGMEM   = "Set Password  ";
-const static char MENU_CLEARPWD[] PROGMEM = "Clear Password";
-const static char MENU_FORMAT[] PROGMEM   = "Format        ";
+const static char MENU_GETPWD[] PROGMEM   = "Password List  ";
+const static char MENU_SETPWD[] PROGMEM   = "New Password   ";
+const static char MENU_CLEARPWD[] PROGMEM = "Delete Password";
+const static char MENU_FORMAT[] PROGMEM   = "Format         ";
 const static char MENU_TEST1[] PROGMEM    = "TEST1         ";
 const static char MENU_TEST2[] PROGMEM    = "TEST2         ";
+//#define MAIN_MENU_NB_ENTRIES 4
 #define MAIN_MENU_NB_ENTRIES 6
 
 const static char MENU_SETPWD_GENERATE[] PROGMEM      = "Generate";
@@ -175,7 +176,7 @@ bool __attribute__ ((noinline)) confirmChoice(char* text)
 char UpperCaseLetters[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 char LowerCaseLetters[]="abcdefghijklmnopqrstuvwxyz";
 char SpecialCharacters[]="&~#'@*$!";
-char Numbers[]="012345678";
+char Numbers[]="0123456789";
 
 bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, MultilineInputBuffer mlib)
 {
@@ -513,9 +514,6 @@ void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
     pool[pool_index++] = idx;
   }  
 
-//Serial.print("len=");
-//Serial.println(len);
-
   // pick from the pool of letters to fill password randomly
   for( uint8_t idx = 0; idx < len; idx++)
   {
@@ -578,15 +576,13 @@ void __attribute__ ((noinline)) generatePassword() {
       }
     } while(len > PASSWORD_MAX_LENGTH);
     
-    //Serial.print("pwd Length:"); Serial.println(len);
     putRandomChars( ((entry.data)+entry.passwordOffset),len);
     
     display.clearDisplay();    
 
-    displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD);
-    delay(MSG_DISPLAY_DELAY);
-  
+    displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD); 
     ES.putEntry( (uint8_t)entryNum, &entry );
+    delay(MSG_DISPLAY_DELAY);
   } 
 }
 
@@ -652,24 +648,9 @@ int __attribute__ ((noinline)) pickEntry() {
   bool hasEntry=false;
   uint8_t maxEntryLength=0;
 
-  // compute total number of entries
-  do
-  {
-    hasEntry = ES.getTitle(entryIdx, menuEntryText);
-    if(hasEntry)
-    {
-      DEBUG(Serial.print("Entry ");)
-      DEBUG(Serial.print(entryIdx);)
-      DEBUG(Serial.print(": ");)
-      DEBUG(Serial.println(menuEntryText);)
-     
-      int len = strlen(menuEntryText);
-      if (len>maxEntryLength) maxEntryLength = len;
-      nbEntries++;
-    } 
-
-    entryIdx++;
-  } while (entryIdx<NUM_ENTRIES);
+  // get stats about stored entries
+  nbEntries = ES.getNbEntries();
+  maxEntryLength = ES.getMaxTitleLength();
 
   if (nbEntries==0) return -1;
 
@@ -732,7 +713,7 @@ int __attribute__ ((noinline)) pickEntry() {
           display.setCursor(2*CHAR_XSIZE,y);
           display.print(menuEntryText);
           if (entryLen<maxEntryLength) {
-             for (int k=0;k<SCREEN_MAX_NB_CHARS_PER_LINE-entryLen-2;k++){
+             for (int k=0;k<maxEntryLength-entryLen;k++){
                display.print(' ');
              }
            }        
@@ -998,6 +979,8 @@ void setup()   {
 
   // debug feature to force reformatting
   //messUpEEPROMFormat();
+  
+  // debug feature to check buttons connections/pin mapping
   //testButtons();
 
   // Check if the expected header is found in the EEPROM, else trig a format
@@ -1009,6 +992,8 @@ void setup()   {
     char buf[DEVICENAME_LENGTH+11];
     sprintf(buf, "BLUEKEY (%s)", devName);
     displayCenteredMessage(buf);
+    ES.refreshMapping();
+
     delay(MSG_DISPLAY_DELAY);
   }
   
@@ -1020,27 +1005,51 @@ void setup()   {
 }
 
 void testFunction1() {
+  
+  char entryTitle[32];
+unsigned long StartTime = millis();
+  
 
-  display.clearDisplay();
-  display.setCursor(0,0);
-  // 24 UP
-  // 25 DOWN
-  // 26 RIGHT
-  // 27 LEFT
-  for (char c=24; c<28; c++) {
-    display.print((char)c);
+  ES.getTitle(ES.getNthValidEntryIndex(2), entryTitle);
+    
+  unsigned long CurrentTime = millis(); 
+  unsigned long ElapsedTime = CurrentTime - StartTime;
+  Serial.print("getTitle:"); Serial.println(ElapsedTime); 
+/*  
+  ES.refreshMapping();
+  int nbEntries = ES.getNbEntries();
+
+  for (int k=0; k< nbEntries; k++) {
+     Serial.print("Valid entry:");
+     Serial.println(ES.getNthValidEntryIndex(k));
   }
-  display.display();
-
-  delay(5000);
+  */
 }
 
 void testFunction2() {
-  testEEPROM(0);
-  delay(5000);
-  //Serial.print("S~,6\n");
-}
+  //testEEPROM(0);
 
+  entry_t entry;
+
+  for (int k=0; k<64; k++) {
+
+    Serial.print("gen ");
+    Serial.println(k);
+
+    uint16_t entryNum = ES.getNextEmpty();
+
+    if (entryNum != -1) {
+    putRandomChars(entry.title,10);
+    putRandomChars( entry.data,12);
+    entry.passwordOffset = strlen(entry.data)+1;
+    putRandomChars( ((entry.data)+entry.passwordOffset),12);
+  
+    ES.putEntry(entryNum, &entry);
+    }
+  }
+  
+ // delay(5000);
+}
 
 ////////////////////
 // MAIN LOOP
@@ -1089,7 +1098,7 @@ void loop() {
       Serial.print("clear entry "); Serial.println(entry_choice);
       if (entry_choice != -1) {
         if (confirmChoice((char*)"del entry?")) 
-          ES.delEntry(entry_choice);
+          ES.delEntry(entry_choice, true);
       } else {
         displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
         delay(MSG_DISPLAY_DELAY);
