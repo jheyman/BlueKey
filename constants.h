@@ -59,14 +59,13 @@
 #endif
 
 #define BT_connected_pin 8
+#define ENTROPY_PIN A3
 
 
 #define DEBOUNCE_TIME 10 //ms
 #define BUTTON_HOLD_TIME 300 //ms
 
 #define debounceDelay 50
-
-#define ledPin 13
 
 #define DISPLAY_WIDTH 128
 #define DISPLAY_HEIGHT 32
@@ -95,6 +94,9 @@
 #define ACCOUNT_LOGIN_LENGTH 12
 
 #define MSG_DISPLAY_DELAY 1000
+
+#define RET_EMPTY -1
+#define RET_CANCEL -2 
 
 typedef struct {
   char* buffers[5]; 

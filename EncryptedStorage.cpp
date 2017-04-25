@@ -36,18 +36,12 @@
 //92-123	- Background noise for password (32 bytes)
 //124-124	- Keyboard Layout (1 byte)
 
-
 //We reserve 1024 bytes for a rainy day
 #define EEPROM_ENTRY_START_ADDR 1280
 
-#define ENTRY_SIZE sizeof(entry_t)
-
-//#define EEPROM_ENTRY_DISTANCE 240 //EntrySize + 16 for iv
-#define EEPROM_ENTRY_DISTANCE 128 //EntrySize + 16 for iv
-
-//#define ENTRY_FULL_CBC_BLOCKS 14 //Blocksize / 16 for encryption
-#define ENTRY_FULL_CBC_BLOCKS 7//Blocksize / 16 for encryption
-
+#define ENTRY_SIZE sizeof(entry_t) // 80
+#define EEPROM_ENTRY_DISTANCE 96 // EntrySize + 16 for iv
+#define ENTRY_FULL_CBC_BLOCKS 5 //Blocksize / 16 for encryption
 #define ENTRY_NAME_CBC_BLOCKS 2 //Blocksize of decryption of title
 
 #define EEPROM_IDENTIFIER_LOCATION 0
@@ -66,124 +60,21 @@ const static char eepromIdentifierTxt[HEADER_EEPROM_IDENTIFIER_LEN] PROGMEM  =  
 #define EEPROM_PASS_BACKGROUND_LOCATION (EEPROM_PASS_CIPHER_LOCATION + EEPROM_PASS_CIPHER_LENGTH)
 #define EEPROM_PASS_BACKGROUND_LENGTH 32 
 
-#define EEPROM_KEYBOARD_LAYOUT_LOCATION	(EEPROM_PASS_BACKGROUND_LOCATION + EEPROM_PASS_BACKGROUND_LENGTH)
-#define EEPROM_KEYBOARD_LAYOUT_LENGTH 1
+#define EEPROM_NB_ENTRIES_LOCATION	(EEPROM_PASS_BACKGROUND_LOCATION + EEPROM_PASS_BACKGROUND_LENGTH)
+#define EEPROM_NB_ENTRIES_LENGTH 1
 
 //Read the IV which comes after 12 + 32 bytes and is 16 bytes long. (Identifier + Unit name)
 #define headerIdentifierOffsetAndIv(iv) I2E_Read( EEPROM_IV_LOCATION, iv, EEPROM_IV_LENGTH )
-#define entryOffset( entryNum ) ((EEPROM_ENTRY_START_ADDR)+(EEPROM_ENTRY_DISTANCE*entryNum))
+#define entryOffset( entryNum ) ((EEPROM_ENTRY_START_ADDR)+(EEPROM_ENTRY_DISTANCE*(entryNum)))
+
+void EncryptedStorage::initialize()
+{
+  I2E_Read(EEPROM_NB_ENTRIES_LOCATION, &nbEntries, EEPROM_NB_ENTRIES_LENGTH);
+}
 
 uint8_t EncryptedStorage::getNbEntries()
 {
   return nbEntries;
-}
-
-uint8_t EncryptedStorage::getMaxTitleLength() 
-{
-  uint8_t maxTitleLength=0;
-  uint8_t titleLength=0;
-  char tmp[32];
-  
-  for (int k = 0; k < nbEntries; k++)
-  {
-    ES.getTitle(mappingBuffer[k], tmp);
-    titleLength = strlen(tmp);
-    if (titleLength > maxTitleLength) maxTitleLength = titleLength;
-  }
-
-  return maxTitleLength;
-}
-
-void __attribute__ ((noinline)) EncryptedStorage::refreshMapping() 
-{
-  int8_t entryIdx=0;
-  uint8_t mappingIdx=0;
-  uint8_t foundEntries=0;
-  bool validEntry=false;
-  char entryTitle[32];
-  char tmp[32];
-
-  unsigned long StartTime = millis();
-  
-  // Initialize mappingBuffer with invalid indexes
-  for (mappingIdx = 0; mappingIdx <NUM_ENTRIES; mappingIdx++)
-  {
-    mappingBuffer[mappingIdx] = -1;
-  }
-
-  // initialize nbEntries
-  nbEntries = 0;
-  
-  // read all EEPROM entries and fill mappingBuffer with valid entries indexes, sorted alphabetically
-  for (entryIdx = 0; entryIdx <NUM_ENTRIES; entryIdx++)
-  {
-    validEntry = ES.getTitle(entryIdx, entryTitle);
-    
-    if(validEntry)
-    {
-
-    //Serial.print("find spot for "); 
-    //Serial.print(entryIdx);
-    //Serial.print(' '); 
-    //ES.getTitle(mappingBuffer[mappingIdx], tmp); 
-    //Serial.println(tmp);
-
-    
-        // insert entry at the correct position in the buffer to preserve alphabetical order, shifting other entries as needed
-        for (int k=0; k<NUM_ENTRIES; k++) 
-        {
-            // if we have reached an empty slot in the buffer, just fill it now.
-            if (mappingBuffer[k] == -1) {
-              mappingBuffer[k] = entryIdx;
-              //Serial.print("copy at "); 
-              //Serial.println(k);
-              break;
-            }
-            // else check if our new entry is before or after in the alphabetical sort
-            else {
-              ES.getTitle(mappingBuffer[k], tmp);
-              if (strcmp(entryTitle, tmp) < 0)
-              {
-
-                 //Serial.print("shft frm "); 
-                 //Serial.println(k);
-    
-                // shift all values from k to END by one slot
-                for (int p=nbEntries-1; p>=k; p--) {
-                  mappingBuffer[p+1] = mappingBuffer[p];
-                }
-                
-                // and insert new value
-                mappingBuffer[k] = entryIdx;
-                break;
-              }
-            }
-        }  
-        nbEntries++;
-/*
-  Serial.print("entries: "); Serial.println(nbEntries);
-  
-  for (mappingIdx = 0; mappingIdx <NUM_ENTRIES; mappingIdx++)
-  {
-    if (mappingBuffer[mappingIdx] != -1) {
-    Serial.print(mappingIdx);
-    Serial.print(": ");
-    Serial.print(mappingBuffer[mappingIdx]);
-    Serial.print(", ");
-    if (ES.getTitle(mappingBuffer[mappingIdx], tmp)) 
-      Serial.println(tmp);
-    else
-      Serial.println("empty");
-    }
-  }
-Serial.println("---");
-*/
-          
-    }
-  }
-  unsigned long CurrentTime = millis(); 
-  unsigned long ElapsedTime = CurrentTime - StartTime;
-  Serial.print("refreshMap:"); Serial.println(ElapsedTime); 
 }
 
 bool __attribute__ ((noinline)) EncryptedStorage::readHeader(char* deviceName)
@@ -212,36 +103,26 @@ bool __attribute__ ((noinline)) EncryptedStorage::unlock( byte* k )
   byte iv[EEPROM_IV_LENGTH];
   bool success = FALSE;
 
-  //printHexBuff(key, "k", 32);
-
   uint16_t offset = headerIdentifierOffsetAndIv(iv);
 
   //Read the encrypted password which comes after the IV
   offset = I2E_Read( offset, key, EEPROM_PASS_CIPHER_LENGTH );
 
-  //printHexBuff(key, "enc_key", 32);
-  
   //Read the background noise for the password
   I2E_Read( offset, bck, EEPROM_PASS_BACKGROUND_LENGTH );
-
-  //printHexBuff(key, "bck", 32);
   
   //xor it with zero padded key
   for(uint8_t i = 0 ; i < EEPROM_PASS_CIPHER_LENGTH; i++ )
   {
     k[i] ^= bck[i];
   }
-
-  //printHexBuff(k, "xor_k", 32);
   
   //Set key
   aes.set_key(k, 256);  
 
   //Decrypt
   if( aes.cbc_decrypt (key, key, 2, iv) == SUCCESS )
-  {  
-    //printHexBuff(key, "dec_key", 32);
-      
+  {        
     success=TRUE;
     for(uint8_t i = 0 ; i < EEPROM_PASS_CIPHER_LENGTH; i++ )
     {
@@ -281,15 +162,15 @@ bool __attribute__ ((noinline)) EncryptedStorage::getTitle( uint8_t entryNum, ch
   byte iv[EEPROM_IV_LENGTH];
   byte cipher[ENTRY_TITLE_SIZE];
   uint16_t offset = getIVandStartAddressForEntry( entryNum, iv);
-    
+   
   if( ivIsEmpty( iv ) )
   {
     return(FALSE);
   }
   
-  //Read first 32 bytes of entry.
+  //Read bytes of entry corresponding to title only.
   I2E_Read( offset, cipher, ENTRY_TITLE_SIZE );
-  
+
   //Decrypt title
   aes.cbc_decrypt( cipher, (byte*)title, ENTRY_NAME_CBC_BLOCKS, iv );
 
@@ -313,17 +194,84 @@ bool __attribute__ ((noinline)) EncryptedStorage::getEntry( uint8_t entryNum, en
   return(TRUE);
 }
 
-uint8_t EncryptedStorage::getNthValidEntryIndex(uint8_t N)
+int8_t __attribute__ ((noinline)) EncryptedStorage::insertEntry(entry_t* entry) 
 {
-  return mappingBuffer[N];
+  char tmp[ENTRY_TITLE_SIZE];
+  uint8_t insertIndex=nbEntries; // by default assume we will insert the entry after the last valid entry 
+  int entryIdx = 0;
+  char tmp_entry[EEPROM_ENTRY_DISTANCE];
+
+  if (nbEntries == NUM_ENTRIES)  return -1;
+    
+  // parse all active EEPROM entries and figure out at which location to insert it to preserve alphabetical ordering
+  for (entryIdx = 0; entryIdx < nbEntries; entryIdx++)
+  {
+    if(ES.getTitle(entryIdx, tmp))
+    {       
+       if (strcmp(entry->title, tmp) < 0)
+       {
+         insertIndex = entryIdx;
+         break;
+       }          
+    }
+  } 
+
+  if (nbEntries > 0)
+  {
+    // Move all entries from this index to the end up one slot
+    for (entryIdx = nbEntries-1; entryIdx >= insertIndex; entryIdx--)
+    {
+        // Get element
+        uint16_t offsetsrc = entryOffset(entryIdx);
+        I2E_Read( offsetsrc, (byte*)tmp_entry, EEPROM_ENTRY_DISTANCE );
+        uint16_t offsetdst = entryOffset(entryIdx+1);
+        I2E_Write( offsetdst,(byte*)tmp_entry, EEPROM_ENTRY_DISTANCE );
+    }
+  }
+
+  // Now store new entry at the freed index slot
+  ES.putEntry(insertIndex, entry);
+
+  //Increment current nb of entries and save to EEPROM
+  nbEntries++;
+  I2E_Write(EEPROM_NB_ENTRIES_LOCATION, &nbEntries, EEPROM_NB_ENTRIES_LENGTH);
+
+  return insertIndex;
 }
-  
+
+void __attribute__ ((noinline)) EncryptedStorage::removeEntry (uint8_t entryNum)
+{
+  char tmp_entry[EEPROM_ENTRY_DISTANCE];
+    
+  if (nbEntries == 0) return;
+
+  // delete entry
+  ES.delEntry(entryNum);
+
+  //shift other entries
+  for (uint8_t entryIdx = entryNum; entryIdx < nbEntries-1; entryIdx++)
+  {
+    //Serial.print("moving idx: "); Serial.println(entryIdx);
+      uint16_t offsetsrc = entryOffset(entryIdx+1);
+      I2E_Read( offsetsrc, (byte*)tmp_entry, EEPROM_ENTRY_DISTANCE );
+      uint16_t offsetdst = entryOffset(entryIdx);
+      I2E_Write( offsetdst,(byte*)tmp_entry, EEPROM_ENTRY_DISTANCE );
+  }
+
+  // clean-up last slot
+  ES.delEntry(nbEntries-1);
+    
+  // update nb of entries and save new value to EEPROM
+  nbEntries--;
+  I2E_Write(EEPROM_NB_ENTRIES_LOCATION, &nbEntries, EEPROM_NB_ENTRIES_LENGTH);
+}
+
 void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, entry_t* entry )
 {
   uint16_t offset = entryOffset(entryNum);
-  //Create IV
   byte iv[EEPROM_IV_LENGTH];
-
+  
+  //Create IV
   putIv(iv);
   
   //Write IV
@@ -334,16 +282,15 @@ void __attribute__ ((noinline)) EncryptedStorage::putEntry( uint8_t entryNum, en
 
   //Write entry
   I2E_Write( offset,(byte*)entry,  ENTRY_SIZE );
-
-  refreshMapping();
 }
 
-void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum, bool refresh)
+void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum)
 {
   uint16_t offset = entryOffset(entryNum);
   entry_t dat;
-  
+
   memset(&dat,0,EEPROM_IV_LENGTH); //Zero out first 16 bytes of entry so we can write an all zero iv.  
+  
   //Write an all zero iv to indicate it's empty
   offset = I2E_Write( offset, (byte*)&dat, EEPROM_IV_LENGTH );
   
@@ -355,8 +302,6 @@ void __attribute__ ((noinline)) EncryptedStorage::delEntry(uint8_t entryNum, boo
   
   //Write random data
   I2E_Write( offset, (byte*)&dat, ENTRY_SIZE );
-
-  if (refresh) refreshMapping();
 }
 
 void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name )
@@ -365,14 +310,11 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
 
   for(uint16_t i=0; i < NUM_ENTRIES; i++ )
   {
-    //Serial.write('\n');txt(i);Serial.write('/');txt(NUM_ENTRIES);
     char tmp[24];
-    delEntry((uint8_t)i, false);
+    delEntry((uint8_t)i);
     sprintf(tmp, "Formatting: %d/%d", i+1, NUM_ENTRIES);
     displayCenteredMessage(tmp);    
   }
-
-  //printHexBuff(pass, "UserPass", 32);
   
   putPass(pass);
     
@@ -386,12 +328,8 @@ void __attribute__ ((noinline)) EncryptedStorage::format( byte* pass, char* name
 
   //Serial.print("device name written:"); Serial.println(name);
 
-  nbEntries = 0;  
-  
-  for(uint8_t k=0; k < NUM_ENTRIES; k++ )
-  {
-     mappingBuffer[k] = -1;
-  }
+  nbEntries = 0;
+  I2E_Write(EEPROM_NB_ENTRIES_LOCATION, &nbEntries, EEPROM_NB_ENTRIES_LENGTH); 
 }
 
 //Find used and all 0  IV's so we can avoid them (0 avoided because we use it for detecting empty entry)
@@ -442,8 +380,6 @@ void __attribute__ ((noinline)) EncryptedStorage::putPass( byte* pass )
   {
     pass[i] ^= bck[i];
   }
-
-  //printHexBuff(pass, "PASS", 32);
  
   //Generate IV
   putIv( iv );
@@ -451,21 +387,15 @@ void __attribute__ ((noinline)) EncryptedStorage::putPass( byte* pass )
   //Write the IV before it's changed by the encryption.
   I2E_Write( EEPROM_IV_LOCATION, iv, EEPROM_IV_LENGTH );
 
-  //printHexBuff(iv, "iv", 16);
-
   //Encrypt the password.
   aes.set_key(pass, 256);  
   aes.cbc_encrypt(pass, key, 2, iv);
 
   //Write encrypted key
   I2E_Write(EEPROM_PASS_CIPHER_LOCATION, key, EEPROM_PASS_CIPHER_LENGTH);
-
-  //printHexBuff(key, "EEkey", 32);
-  
+ 
   //Write background noise
   I2E_Write(EEPROM_PASS_BACKGROUND_LOCATION, bck, EEPROM_PASS_BACKGROUND_LENGTH); 
-
-  //printHexBuff(bck, "EEbck", 32);
 }
 
 void __attribute__ ((noinline)) EncryptedStorage::putIv( byte* dst )
@@ -473,9 +403,9 @@ void __attribute__ ((noinline)) EncryptedStorage::putIv( byte* dst )
   do {
     for(uint8_t i = 0; i < EEPROM_IV_LENGTH; i++)
     {
-      analogWrite(10, 250);
+      analogWrite(ENTROPY_PIN, 250);
       dst[i]=Entropy.random(0xff);  
-      digitalWrite(10,1);
+      digitalWrite(ENTROPY_PIN,1);
     }
 
   } while( ivIsInvalid(dst) );
@@ -495,32 +425,6 @@ uint8_t EncryptedStorage::crc8(const uint8_t *addr, uint8_t len)
     }
   }
   return crc;
-}
-
-uint16_t __attribute__ ((noinline)) EncryptedStorage::getNextEmpty()
-{
-  uint8_t iv[EEPROM_IV_LENGTH];
-  uint16_t idx;
-  uint8_t taken;
-
-  for(idx=0; idx < NUM_ENTRIES; idx++)
-  {
-    //Read iv
-    getIVandStartAddressForEntry(idx, iv);
-    
-    taken=0;
-    for(uint8_t i = 0; i < EEPROM_IV_LENGTH; i++)
-    {
-      taken |= iv[i];
-    }
-    
-    if( !taken )
-    {
-      break;
-    }
-  }
-  
-  return( idx );
 }
 
 EncryptedStorage ES = EncryptedStorage();

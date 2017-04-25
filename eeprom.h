@@ -20,9 +20,6 @@
 #define __eeprom_H__
 #include <Arduino.h>
 
-//#define I2E_Write(addr, data, len) 0
-//#define I2E_Read(addr, data, len) 0
-
 class EEPROM
 {
 public:
