@@ -166,6 +166,11 @@ void printSRAMMap() {
     
 }
 
+void printCurrentStackMargin() 
+{
+  Serial.print("margin="); Serial.println(SP-(int)&__bss_end);
+}
+
 void I2Cscan() {
   byte error, address;
   int nDevices;

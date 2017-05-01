@@ -32,6 +32,7 @@ void printHexBuff(byte* buff, char* name, int len);
 void paintStack();
 uint16_t StackMarginWaterMark(void);
 void printSRAMMap();
+void printCurrentStackMargin();
 void I2Cscan();
 int mod(int x, int m);
 

@@ -11,21 +11,6 @@
 #define DEBUG_ENABLE 0
 #define DEBUG(x) if(DEBUG_ENABLE) { x }
 
-
-
-
-extern int __bss_end; 
-
-
-
-
-
-
-
-
-
-
-
 // Strings stored in program memory (to spare SRAM)
 // max 21 characters per line
 const static char NEW_CODE_INVITE[] PROGMEM = "NEW CODE? ";
@@ -36,6 +21,9 @@ const static char WHATEVER_INVITE[] PROGMEM = "TEST:";
 const static char NEW_CODE_MISMATCH[] PROGMEM = "ERROR: mismatch";
 const static char INVALID_VALUE[] PROGMEM = "ERROR: invalid value";
 const static char DEVICE_EMPTY[] PROGMEM = "Device is empty";
+const static char LOGIN_SENT[] PROGMEM = "Login sent";
+const static char PASSWORD_SENT[] PROGMEM = "Password sent";
+const static char LOGIN_PASSWORD_SENT[] PROGMEM = "Login & Pwd sent";
 const static char NEED_FORMAT[] PROGMEM = "Format needed";
 const static char LOGIN_GRANTED[] PROGMEM = "OK";
 const static char LOGIN_DENIED[] PROGMEM = "DENIED";
@@ -45,6 +33,7 @@ const static char ACCOUNT_LOGIN_INPUT[] PROGMEM = "Login? ";
 const static char PASSWORD_LENGTH_INPUT[] PROGMEM = "Length? [0-16] ";
 const static char PASSWORD_VALUE_INPUT[] PROGMEM = "Pwd? ";
 const static char STORING_NEW_PASSWORD[] PROGMEM = "Storing...";
+const static char DELETING_ENTRY[] PROGMEM = "Deleting...";
 
 // Menu entries texts
 // Rules:
@@ -58,16 +47,22 @@ const static char MENU_MANAGEPWD[] PROGMEM   = "Manage Passwords";
 const static char MENU_SETPWD[] PROGMEM      = "New Password   ";
 const static char MENU_CLEARPWD[] PROGMEM    = "Delete Password";
 const static char MENU_FORMAT[] PROGMEM      = "Format         ";
-const static char MENU_NB_ENTRIES[] PROGMEM = "Check entries  ";
+const static char MENU_NB_ENTRIES[] PROGMEM  = "Check entries  ";
 const static char MENU_TEST1[] PROGMEM       = "TEST1          ";
 const static char MENU_TEST2[] PROGMEM       = "TEST2          ";
 #define MENU_MANAGE_PASSWORDS_NB_ENTRIES 6
 
-const static char MENU_SETPWD_GENERATE[] PROGMEM      = "Generate";
-const static char MENU_SETPWD_MANUALINPUT[] PROGMEM   = "Manually";
+const static char MENU_SETPWD_GENERATE[] PROGMEM    = "Generate";
+const static char MENU_SETPWD_MANUALINPUT[] PROGMEM = "Manually";
 #define MENU_SETPWD_NB_ENTRIES 2
 
-const static char MENU_SETPWD_GENERATE_LENGTH[] PROGMEM      = "Length?";
+const static char MENU_SETPWD_GENERATE_LENGTH[] PROGMEM = "Length?";
+
+const static char MENU_SENDPWD_LOGINONLY[] PROGMEM = "Login only   ";
+const static char MENU_SENDPWD_PWDONLY[] PROGMEM   = "Password only";
+const static char MENU_SENDPWD_LOGINPWD[] PROGMEM  = "Login/Tab/Pwd";
+#define MENU_SENDPWD_NB_ENTRIES 3
+
 
 ////////////////////////////////
 // Gamepad buttons management //
@@ -104,15 +99,6 @@ void check_buttons()
      
     byte newstate = digitalRead(buttons[index]);
 
-
-
-
-
-
-
-
-      
-
     // If two readings in a row give the same value, state is confirmed
     if (newstate == lateststate[index]) {
       // If button was not pressed, but now is (state LOW = input activated):
@@ -125,16 +111,6 @@ void check_buttons()
       // Keep track of current confirmed button state
       button_pressed[index] = !newstate;
     } 
-
-    
- //   else {
-//      if (index == 6)
- //       Serial.print(newstate);
-//    }
-
-
-
-
 
     // Check is button has been pressed long enough since last press/repeat time
     if (button_pressed[index]) {
@@ -216,7 +192,7 @@ bool __attribute__ ((noinline)) confirmChoice(char* text)
 
 char UpperCaseLetters[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 char LowerCaseLetters[]="abcdefghijklmnopqrstuvwxyz";
-char SpecialCharacters[]="&~#'@*$!";
+char SpecialCharacters[]="!\"#$%&'()*+,-./";
 char Numbers[]="0123456789";
 
 bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, MultilineInputBuffer mlib)
@@ -539,6 +515,14 @@ int __attribute__ ((noinline)) menu_set_pwd() {
   return generic_menu(MENU_SETPWD_NB_ENTRIES, menutexts);
 }
 
+int __attribute__ ((noinline)) menu_send_pwd() {
+  uint8_t* menutexts[MENU_SENDPWD_NB_ENTRIES];
+  menutexts[0] =   (uint8_t*)&MENU_SENDPWD_LOGINONLY;
+  menutexts[1] =   (uint8_t*)&MENU_SENDPWD_PWDONLY;
+  menutexts[2] =   (uint8_t*)&MENU_SENDPWD_LOGINPWD;
+  return generic_menu(MENU_SENDPWD_NB_ENTRIES, menutexts);
+}
+
 void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
 {
   char pool[14+10+26+26];
@@ -648,10 +632,7 @@ void __attribute__ ((noinline)) generatePassword() {
     display.clearDisplay();    
 
     displayCenteredMessageFromStoredString((uint8_t*)&STORING_NEW_PASSWORD); 
-
-    Serial.print("margin="); Serial.println(SP-(int)&__bss_end);
-
-    
+   
     ES.insertEntry(&entry);
     //delay(MSG_DISPLAY_DELAY);
   } 
@@ -697,6 +678,7 @@ void __attribute__ ((noinline)) inputPassword() {
     
     // Query user for entry pwd
     getStringFromFlash(buf, (uint8_t*)&PASSWORD_VALUE_INPUT);
+    entry.passwordOffset = strlen(entry.data)+1;
     validated = getStringFromUser((entry.data)+entry.passwordOffset, PASSWORD_MAX_LENGTH, buf, mlib );    
     // CANCEL management
     if (!validated) return;
@@ -1021,45 +1003,14 @@ void testButtons() {
   }
 }
 
-
-
-
-void testFunction2() ;
-
-
-
-
 ////////////////////
 // INITIALISATION
 ////////////////////
 void setup()   {  
-
+ 
   // Initialize stack canary
   DEBUG(paintStack();)
 
-  paintStack();
-
-     
-  char devName[DEVNAME_BUFF_LEN];
-  memset(devName,0,DEVNAME_BUFF_LEN);
-
-  // initialize button state
-  memset(button_pressed,0,NUMBUTTONS*sizeof(byte));
-  
-  // RN42 is configured by default to use 115200 bauds on UART links
-  Serial.begin(115200);
-        
-  DEBUG(printSRAMMap(););
-
-  DEBUG(
-  int x = StackMarginWaterMark();
-  Serial.print("initial Watermark : "); Serial.println(x);
-  Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);)
-
-  pinMode(ENTROPY_PIN, OUTPUT);
-  Entropy.initialize();
-  setRng();
-  
   // Initialize OLED display
   display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_I2C_ADDR);
   display.ssd1306_command(SSD1306_SEGREMAP );
@@ -1067,7 +1018,29 @@ void setup()   {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE, BLACK);
-  
+
+  // Print banner
+  char tmp[8];
+  strcpy(tmp, "BLUEKEY");
+  displayCenteredMessage(tmp); 
+  delay(MSG_DISPLAY_DELAY);
+ 
+  char devName[DEVNAME_BUFF_LEN];
+  memset(devName,0,DEVNAME_BUFF_LEN);
+
+  // initialize button state
+  memset(button_pressed,0,NUMBUTTONS*sizeof(byte));
+          
+  DEBUG(printSRAMMap(););
+
+  DEBUG(
+  int x = StackMarginWaterMark();
+  Serial.print("initial Watermark : "); Serial.println(x);
+  Serial.print("Current stack size: ");  Serial.println((RAMEND - SP), DEC);)
+
+  // RN42 is configured by default to use 115200 bauds on UART links
+  Serial.begin(115200);
+      
   // Setup input I/Os connected to buttons
   for (byte i=0; i < NUMBUTTONS; i++) {
     pinMode(buttons[i], INPUT_PULLUP);
@@ -1079,6 +1052,10 @@ void setup()   {
   // debug feature to check buttons connections/pin mapping
   //testButtons();
 
+  pinMode(ENTROPY_PIN, OUTPUT);
+  Entropy.initialize();
+  setRng();
+
   ES.initialize();
   
   // Check if the expected header is found in the EEPROM, else trig a format
@@ -1086,13 +1063,6 @@ void setup()   {
     displayCenteredMessageFromStoredString((uint8_t*)&NEED_FORMAT);
     delay(MSG_DISPLAY_DELAY);
     format();
-  } else {
-    char buf[DEVICENAME_LENGTH+11];
-    sprintf(buf, "BLUEKEY (%s)", devName);
-    displayCenteredMessage(buf);
-    //ES.refreshMapping();
-
-    delay(MSG_DISPLAY_DELAY);
   }
   
   // Login now
@@ -1101,11 +1071,6 @@ void setup()   {
     login_status = login();
   } while (login_status==false);
 
-    Serial.print("L=");
-    Serial.println((int)&__bss_end); 
-    Serial.print("W0="); Serial.println(StackMarginWaterMark());
-
-    //testFunction2();
 }
 
 void printNbEntries()
@@ -1124,9 +1089,46 @@ void printNbEntries()
 
 void testFunction1() {
 
-//ES.removeEntry(ES.getNbEntries()-1);
-//ES.removeEntry(ES.getNbEntries()-2);
-ES.removeEntry(0);
+
+  int idx = 0;
+    entry_t entry;
+    int res;
+  //char tmp[ENTRY_TITLE_SIZE];
+
+for (int k=0; k<20; k++) {
+
+int idx = ES.getNbEntries();
+
+
+    
+    char c = 65 + Entropy.random(20);
+    sprintf(entry.title, "testtitle%c_%d", c, idx);
+    //strcpy(entry.title, "testtitle");
+    strcpy(entry.data, "testlogin");
+    //putRandomChars(entry.title,10);
+    //putRandomChars(entry.data,10);
+    entry.passwordOffset = strlen(entry.data)+1;
+    //putRandomChars( ((entry.data)+entry.passwordOffset),10);
+    strcpy(entry.data+entry.passwordOffset, "testpwd");
+
+    res = ES.insertEntry(&entry);
+
+    display.clearDisplay();    
+    display.setCursor(0,0);
+    display.print("test "); display.println(idx);
+    display.print("res="); display.print(res);
+    display.display();
+    
+}
+
+
+
+
+
+
+
+
+//ES.removeEntry(0);
 /*
 
   entry_t entry;
@@ -1168,13 +1170,8 @@ void testFunction2() {
     //putRandomChars( ((entry.data)+entry.passwordOffset),10);
     strcpy(entry.data+entry.passwordOffset, "testpwd");
 
-    Serial.print("margin="); Serial.println(SP-(int)&__bss_end);
-
     ES.insertEntry(&entry);
-
-    //ES.putEntry(idx, &entry);
-    Serial.print("doneW=");Serial.println(StackMarginWaterMark());
-    
+   
     
   /*
   for (int k=0; k< ES.getNbEntries(); k++) {
@@ -1190,21 +1187,13 @@ void testFunction2() {
 
 }
 
-
-
-
-
-
 ////////////////////
 // MAIN LOOP
 ////////////////////
 void loop() {
 
   int entry_choice1=-1,entry_choice2=-1;
-  
   int selection = main_menu();
-
-  Serial.print("W="); Serial.println(StackMarginWaterMark());
 
   switch (selection) {
    entry_t temp;
@@ -1217,14 +1206,42 @@ void loop() {
         delay(MSG_DISPLAY_DELAY);
       }
       else if (entry_choice1 != RET_CANCEL) {
+        
         DEBUG(Serial.print("picked entry:");)
         DEBUG(Serial.println(entry_choice1);)
         ES.getEntry(entry_choice1, &temp);
         DEBUG(Serial.print("password for this entry:");)
-        
-        // This is where the critical step happens: send the decoded password over the serial link (to Bluetooth or wired keyboard interface)
-        // Send password to Serial TX line (hence to Bluetooth module)
-        Serial.print(temp.data+temp.passwordOffset);
+
+        // This is where the critical step happens: send the decoded login and/or password over the serial link (to Bluetooth or wired keyboard interface)
+        entry_choice2 = 0;
+        // Stay in this menu until cancel button is pressed. This is to allow to send login then password (for example) without having to re-select the menu twice.
+        while (entry_choice2 != RET_CANCEL) {
+          entry_choice2 = menu_send_pwd();
+          switch (entry_choice2) {
+            case 0:
+              // LOGIN ONLY             
+              Serial.print(temp.data);
+              displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_SENT);
+              delay(MSG_DISPLAY_DELAY);               
+              break;
+            case 1:
+              // PWD ONLY
+              Serial.print(temp.data+temp.passwordOffset); 
+              displayCenteredMessageFromStoredString((uint8_t*)&PASSWORD_SENT);
+              delay(MSG_DISPLAY_DELAY);       
+              break;
+            case 2:
+              // LOGIN+TAB+PWD
+              Serial.print(temp.data);
+              Serial.print((char)9); // tab key
+              Serial.print(temp.data+temp.passwordOffset);  
+              displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_PASSWORD_SENT);
+              delay(MSG_DISPLAY_DELAY);    
+              break;              
+            default:
+              break;
+          }
+        } 
       }
       break;
   
@@ -1260,6 +1277,7 @@ void loop() {
           }          
           if (entry_choice2 != RET_CANCEL) {
             if (confirmChoice((char*)"del entry?")) 
+              displayCenteredMessageFromStoredString((uint8_t*)&DELETING_ENTRY); 
               ES.removeEntry(entry_choice2);
           } 
           break;
