@@ -104,5 +104,29 @@ typedef struct {
   byte nbBuffers;
 } MultilineInputBuffer;
 
+enum MainMenuSelection {
+  MAIN_MENU_SENDPWD = 0,
+  MAIN_MENU_MANAGEPWD
+};
+
+enum SendPasswordMenuSelection {
+  SENDPWD_MENU_LOGINONLY = 0,
+  SENDPWD_MENU_PWDNONLY,
+  SENDPWD_MENU_LOGIN_TAB_PWD
+};
+
+enum ManagePasswordsMenuSelection {
+  MANAGEPWD_MENU_SETPWD = 0,
+  MANAGEPWD_MENU_DELPWD,
+  MANAGEPWD_MENU_FORMAT,
+  MANAGEPWD_MENU_CHECKNBENTRIES,
+  MANAGEPWD_MENU_TEST1,
+  MANAGEPWD_MENU_TEST2,
+};
+
+enum SetPasswordMenuSelection {
+  SETPWD_MENU_GENERATE = 0,
+  SETPWD_MENU_MANUALLY,
+};
 #endif
 

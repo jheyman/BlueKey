@@ -48,9 +48,10 @@ const static char MENU_SETPWD[] PROGMEM      = "New Password   ";
 const static char MENU_CLEARPWD[] PROGMEM    = "Delete Password";
 const static char MENU_FORMAT[] PROGMEM      = "Format         ";
 const static char MENU_NB_ENTRIES[] PROGMEM  = "Check entries  ";
-const static char MENU_TEST1[] PROGMEM       = "TEST1          ";
-const static char MENU_TEST2[] PROGMEM       = "TEST2          ";
-#define MENU_MANAGE_PASSWORDS_NB_ENTRIES 6
+//const static char MENU_TEST1[] PROGMEM       = "TEST1          ";
+//const static char MENU_TEST2[] PROGMEM       = "TEST2          ";
+//#define MENU_MANAGE_PASSWORDS_NB_ENTRIES 6
+#define MENU_MANAGE_PASSWORDS_NB_ENTRIES 4
 
 const static char MENU_SETPWD_GENERATE[] PROGMEM    = "Generate";
 const static char MENU_SETPWD_MANUALINPUT[] PROGMEM = "Manually";
@@ -503,8 +504,8 @@ int __attribute__ ((noinline)) menu_manage_passwords() {
   menutexts[1] =   (uint8_t*)&MENU_CLEARPWD;
   menutexts[2] =   (uint8_t*)&MENU_FORMAT;
   menutexts[3] =   (uint8_t*)&MENU_NB_ENTRIES;  
-  menutexts[4] =   (uint8_t*)&MENU_TEST1;
-  menutexts[5] =   (uint8_t*)&MENU_TEST2;  
+  //menutexts[4] =   (uint8_t*)&MENU_TEST1;
+  //menutexts[5] =   (uint8_t*)&MENU_TEST2;  
   return generic_menu(MENU_MANAGE_PASSWORDS_NB_ENTRIES, menutexts);
 }
 
@@ -700,8 +701,7 @@ int __attribute__ ((noinline)) pickEntry() {
   byte menu_line_offset_max = 0;
   byte selector_line_index = 0;
   byte selector_line_index_max = 0;
-  //char menuEntryText[ENTRY_TITLE_SIZE];
-  char menuEntryText[32];
+  char menuEntryText[ENTRY_TITLE_SIZE];
   bool needMenuRefresh = true;
   bool needSelectorRefresh = true;
 
@@ -763,6 +763,32 @@ int __attribute__ ((noinline)) pickEntry() {
         }
       }     
     }
+    // Using SNES side left/right buttons to do page down / page up in the list
+    else if (button_justpressed[SideLeftButtonIndex] || button_held[SideLeftButtonIndex]) {
+        if (menu_line_offset_max > 0) {
+          if (menu_line_offset>3) {
+            menu_line_offset = menu_line_offset - 4;
+          } else {
+            menu_line_offset = 0;
+          }
+           needMenuRefresh = true;
+  
+          selector_line_index = 0;
+          needSelectorRefresh = true;
+        }
+    } 
+    else if (button_justpressed[SideRightButtonIndex] || button_held[SideRightButtonIndex]) {
+
+        if (menu_line_offset_max > 0) {
+          if (menu_line_offset < (menu_line_offset_max-4)) {
+            menu_line_offset = menu_line_offset + 4;
+          } else {
+            menu_line_offset = menu_line_offset_max;
+          }
+           needMenuRefresh = true;
+           needSelectorRefresh = true;
+        }
+    }     
 
     // Render modified text entries if updated
     if (needMenuRefresh) {   
@@ -1089,27 +1115,18 @@ void printNbEntries()
 
 void testFunction1() {
 
-
   int idx = 0;
-    entry_t entry;
-    int res;
-  //char tmp[ENTRY_TITLE_SIZE];
+  entry_t entry;
+  int res;
 
-for (int k=0; k<20; k++) {
-
-int idx = ES.getNbEntries();
-
-
-    
-    char c = 65 + Entropy.random(20);
-    sprintf(entry.title, "testtitle%c_%d", c, idx);
-    //strcpy(entry.title, "testtitle");
-    strcpy(entry.data, "testlogin");
-    //putRandomChars(entry.title,10);
-    //putRandomChars(entry.data,10);
+  for (int k=0; k<20; k++) {
+  
+    int idx = ES.getNbEntries();
+   
+    putRandomChars(entry.title,10);
+    putRandomChars(entry.data,10);
     entry.passwordOffset = strlen(entry.data)+1;
-    //putRandomChars( ((entry.data)+entry.passwordOffset),10);
-    strcpy(entry.data+entry.passwordOffset, "testpwd");
+    putRandomChars( ((entry.data)+entry.passwordOffset),10);
 
     res = ES.insertEntry(&entry);
 
@@ -1118,73 +1135,21 @@ int idx = ES.getNbEntries();
     display.print("test "); display.println(idx);
     display.print("res="); display.print(res);
     display.display();
-    
-}
-
-
-
-
-
-
-
-
-//ES.removeEntry(0);
-/*
-
-  entry_t entry;
-  char tmp[ENTRY_TITLE_SIZE];
-
-  for (int k=0; k<64; k++) {
-
-    putRandomChars(entry.title,12);
-    putRandomChars( entry.data,22);
-    entry.passwordOffset = strlen(entry.data)+1;
-    putRandomChars( ((entry.data)+entry.passwordOffset),22);
-    
-    int res = ES.insertEntry(&entry);
-
-    Serial.print("insert entry "); Serial.print(k);Serial.print(" :"); Serial.println(res);
   }
-  */
-  /*
-  for (int k=0; k< ES.getNbEntries(); k++) {
-     Serial.print("Valid entry:");
-     ES.getTitle(k, tmp);
-     Serial.println(tmp);
-  }*/
 }
 
 void testFunction2() {
 
   int idx = ES.getNbEntries();
-    entry_t entry;
-  //char tmp[ENTRY_TITLE_SIZE];
+  entry_t entry;
 
-    char c = 65 + Entropy.random(20);
-    sprintf(entry.title, "testtitle%c_%d", c, idx);
-    //strcpy(entry.title, "testtitle");
-    strcpy(entry.data, "testlogin");
-    //putRandomChars(entry.title,10);
-    //putRandomChars(entry.data,10);
-    entry.passwordOffset = strlen(entry.data)+1;
-    //putRandomChars( ((entry.data)+entry.passwordOffset),10);
-    strcpy(entry.data+entry.passwordOffset, "testpwd");
+  char c = 65 + Entropy.random(20);
+  sprintf(entry.title, "testtitle%c_%d", c, idx);
+  strcpy(entry.data, "testlogin");
+  entry.passwordOffset = strlen(entry.data)+1;
+  strcpy(entry.data+entry.passwordOffset, "testpwd");
 
-    ES.insertEntry(&entry);
-   
-    
-  /*
-  for (int k=0; k< ES.getNbEntries(); k++) {
-     Serial.print("Valid entry");
-     Serial.print(k);
-     Serial.print(": ");
-     ES.getTitle(k, tmp);
-     Serial.println(tmp);
-  }*/
-     
-  //testEEPROM(0);
-  // delay(5000);
-
+  ES.insertEntry(&entry);
 }
 
 ////////////////////
@@ -1193,13 +1158,15 @@ void testFunction2() {
 void loop() {
 
   int entry_choice1=-1,entry_choice2=-1;
+  
+  // Launch main menu
   int selection = main_menu();
 
   switch (selection) {
-   entry_t temp;
+    entry_t temp;
 
-    case 0:
-      // GET_PWD
+    case MAIN_MENU_SENDPWD:
+      // Let user pick an entry from a list
       entry_choice1 = pickEntry();
       if (entry_choice1 == RET_EMPTY)  {
         displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
@@ -1207,31 +1174,30 @@ void loop() {
       }
       else if (entry_choice1 != RET_CANCEL) {
         
-        DEBUG(Serial.print("picked entry:");)
-        DEBUG(Serial.println(entry_choice1);)
+        DEBUG( Serial.print("picked entry:"); )
+        DEBUG( Serial.println(entry_choice1); )
         ES.getEntry(entry_choice1, &temp);
-        DEBUG(Serial.print("password for this entry:");)
+        DEBUG( Serial.print("password for this entry:"); )
 
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // This is where the critical step happens: send the decoded login and/or password over the serial link (to Bluetooth or wired keyboard interface)
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         entry_choice2 = 0;
         // Stay in this menu until cancel button is pressed. This is to allow to send login then password (for example) without having to re-select the menu twice.
         while (entry_choice2 != RET_CANCEL) {
           entry_choice2 = menu_send_pwd();
           switch (entry_choice2) {
-            case 0:
-              // LOGIN ONLY             
+            case SENDPWD_MENU_LOGINONLY:
               Serial.print(temp.data);
               displayCenteredMessageFromStoredString((uint8_t*)&LOGIN_SENT);
               delay(MSG_DISPLAY_DELAY);               
               break;
-            case 1:
-              // PWD ONLY
+            case SENDPWD_MENU_PWDNONLY:
               Serial.print(temp.data+temp.passwordOffset); 
               displayCenteredMessageFromStoredString((uint8_t*)&PASSWORD_SENT);
               delay(MSG_DISPLAY_DELAY);       
               break;
-            case 2:
-              // LOGIN+TAB+PWD
+            case SENDPWD_MENU_LOGIN_TAB_PWD:
               Serial.print(temp.data);
               Serial.print((char)9); // tab key
               Serial.print(temp.data+temp.passwordOffset);  
@@ -1245,21 +1211,20 @@ void loop() {
       }
       break;
   
-    case 1:
-     
+    case MAIN_MENU_MANAGEPWD:
+
+      // Launch sub-menu
       entry_choice1 = menu_manage_passwords();
       switch (entry_choice1) {
 
-        case 0:
-          // SET_PWD   
+        case MANAGEPWD_MENU_SETPWD:
+          // Launch sub-menu
           entry_choice2 = menu_set_pwd();
           switch (entry_choice2) {
-            case 0:
-              // GENERATED             
+            case SETPWD_MENU_GENERATE:
               generatePassword();
               break;
-            case 1:
-              // MANUALLY
+            case SETPWD_MENU_MANUALLY:
               inputPassword();         
               break;
             default:
@@ -1267,10 +1232,9 @@ void loop() {
           }
           break;
         
-        case 1:
-          // CLEAR_PWD
+        case MANAGEPWD_MENU_DELPWD:
           entry_choice2 = pickEntry();
-          Serial.print("clear entry "); Serial.println(entry_choice2);
+          DEBUG( Serial.print("clear entry "); Serial.println(entry_choice2);)
           if (entry_choice2 == RET_EMPTY) {
             displayCenteredMessageFromStoredString((uint8_t*)&DEVICE_EMPTY);
             delay(MSG_DISPLAY_DELAY);
@@ -1282,26 +1246,22 @@ void loop() {
           } 
           break;
                   
-        case 2:
-          // FORMAT
+        case MANAGEPWD_MENU_FORMAT:
           if (confirmChoice((char*)"Sure?")) format();
           break;
 
-        case 3:
-          // NB_ENTRIES
+        case MANAGEPWD_MENU_CHECKNBENTRIES:
           printNbEntries();
           break;      
-                  
-        case 4:
-          // TEST
+        /*          
+        case MANAGEPWD_MENU_TEST1:
           testFunction1();
           break;      
         
-        case 5:
-          // TEST
+        case MANAGEPWD_MENU_TEST2:
           testFunction2();
           break;
-          
+        */ 
         default:
           break;      
       }
@@ -1310,8 +1270,6 @@ void loop() {
       break;   
   }
 
-  DEBUG(
-  int x = StackMarginWaterMark();
-  Serial.print("Watermark after main loop action: "); Serial.println(x); )
+  DEBUG( Serial.print("Watermark after main loop action: "); Serial.println(StackMarginWaterMark()); )
 }
 
