@@ -50,10 +50,10 @@ const static char MENU_SETPWD[] PROGMEM      = "New Password   ";
 const static char MENU_CLEARPWD[] PROGMEM    = "Delete Password";
 const static char MENU_FORMAT[] PROGMEM      = "Format         ";
 const static char MENU_NB_ENTRIES[] PROGMEM  = "Check entries  ";
-const static char MENU_TEST1[] PROGMEM       = "TEST1          ";
-const static char MENU_TEST2[] PROGMEM       = "TEST2          ";
+//const static char MENU_TEST1[] PROGMEM       = "TEST1          ";
+//const static char MENU_TEST2[] PROGMEM       = "TEST2          ";
 #define MENU_MANAGE_PASSWORDS_NB_ENTRIES 6
-//#define MENU_MANAGE_PASSWORDS_NB_ENTRIES 4
+#define MENU_MANAGE_PASSWORDS_NB_ENTRIES 4
 
 const static char MENU_SETPWD_GENERATE[] PROGMEM    = "Generate";
 const static char MENU_SETPWD_MANUALINPUT[] PROGMEM = "Manually";
@@ -510,8 +510,8 @@ int __attribute__ ((noinline)) menu_manage_passwords() {
   menutexts[1] =   (uint8_t*)&MENU_CLEARPWD;
   menutexts[2] =   (uint8_t*)&MENU_FORMAT;
   menutexts[3] =   (uint8_t*)&MENU_NB_ENTRIES;  
-  menutexts[4] =   (uint8_t*)&MENU_TEST1;
-  menutexts[5] =   (uint8_t*)&MENU_TEST2;  
+  //menutexts[4] =   (uint8_t*)&MENU_TEST1;
+  //menutexts[5] =   (uint8_t*)&MENU_TEST2;  
   return generic_menu(MENU_MANAGE_PASSWORDS_NB_ENTRIES, menutexts);
 }
 
@@ -889,7 +889,6 @@ void setRng()
   digitalWrite(ENTROPY_PIN,1);
 }
 
-
 void __attribute__ ((noinline)) getDeviceBTAddress()
 {
   char BTAddress[USERDATA_BT_ADDRESS_LEN+1];  
@@ -908,11 +907,6 @@ void __attribute__ ((noinline)) getDeviceBTAddress()
 
   // Query device BT address
   getStringFromUser(BTAddress, USERDATA_BT_ADDRESS_LEN, buf, mlib );
-
-  // Store in EEPROM in User Data region
-  //memset(buf,0, 32);
-  //strncpy(buf+USERDATA_BT_ADDRESS_OFFSET, BTAddress, USERDATA_BT_ADDRESS_LEN);
-  //ES.writeUserData(buf);
 }
 
 /////////////////////
@@ -1100,10 +1094,6 @@ void configureRN42() {
   Serial.print("S~,6\n");
   delay(250);
 
-  // Configure RN42 as BT Master to be able to initiate connection to device
-  //Serial.print("SM,1\n");
-  //delay(250);
-
   // Setup the name prefix that will appear on the remote device
   Serial.print("S-,bluekey\n");
   delay(250);
@@ -1164,6 +1154,8 @@ void setup()   {
   // RN42 is configured by default to use 115200 bauds on UART links
   Serial.begin(115200);
 
+  // Auto-connect to stored remote bluetooth device address
+  // may fail if no device BT address was set yet, but is harmless
   connectRN42();
       
   // Setup input I/Os connected to buttons
@@ -1316,8 +1308,16 @@ void testFunction1() {
 
 void testFunction2() {
 
+  int idx = ES.getNbEntries();
+  entry_t entry;
 
+  char c = 65 + Entropy.random(20);
+  sprintf(entry.title, "testtitle%c_%d", c, idx);
+  strcpy(entry.data, "testlogin");
+  entry.passwordOffset = strlen(entry.data)+1;
+  strcpy(entry.data+entry.passwordOffset, "testpwd");
 
+  ES.insertEntry(&entry);
 }
 
 ////////////////////
@@ -1422,7 +1422,7 @@ void loop() {
         case MANAGEPWD_MENU_CHECKNBENTRIES:
           printNbEntries();
           break;      
-                  
+        /*          
         case MANAGEPWD_MENU_TEST1:
           testFunction1();
           break;      
@@ -1430,7 +1430,7 @@ void loop() {
         case MANAGEPWD_MENU_TEST2:
           testFunction2();
           break;
-
+        */
         default:
           break;      
       }
@@ -1455,7 +1455,6 @@ void loop() {
           break;      
       }
       break;
-
       
    default:
       break;   

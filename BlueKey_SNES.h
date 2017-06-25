@@ -17,6 +17,7 @@ const static char NEW_CODE_INVITE[] PROGMEM = "NEW CODE? ";
 const static char REPEAT_CODE_INVITE[] PROGMEM = "REPEAT? ";
 const static char NAME_INPUT[] PROGMEM = "NAME? ";
 const static char CODE_INVITE[] PROGMEM = "CODE:";
+const static char BT_ADDRESS_INPUT[] PROGMEM = "BT@: ";
 const static char WHATEVER_INVITE[] PROGMEM = "TEST:";
 const static char NEW_CODE_MISMATCH[] PROGMEM = "ERROR: mismatch";
 const static char INVALID_VALUE[] PROGMEM = "ERROR: invalid value";
@@ -42,7 +43,8 @@ const static char DELETING_ENTRY[] PROGMEM = "Deleting...";
                                             // "<-----MAX------>";
 const static char MENU_GETPWD[] PROGMEM      = "Password List   ";
 const static char MENU_MANAGEPWD[] PROGMEM   = "Manage Passwords";
-#define MAIN_MENU_NB_ENTRIES 2
+const static char MENU_SETUP[] PROGMEM       = "Setup           ";
+#define MAIN_MENU_NB_ENTRIES 3
 
 const static char MENU_SETPWD[] PROGMEM      = "New Password   ";
 const static char MENU_CLEARPWD[] PROGMEM    = "Delete Password";
@@ -64,6 +66,9 @@ const static char MENU_SENDPWD_PWDONLY[] PROGMEM   = "Password only";
 const static char MENU_SENDPWD_LOGINPWD[] PROGMEM  = "Login/Tab/Pwd";
 #define MENU_SENDPWD_NB_ENTRIES 3
 
+const static char MENU_SETUP_CONFIG_BT_MODULE[] PROGMEM   = "BT configuration";
+const static char MENU_SETUP_CONNECT_BT_MODULE[] PROGMEM  = "BT force connect";
+#define MENU_SETUP_NB_ENTRIES 2
 
 ////////////////////////////////
 // Gamepad buttons management //
@@ -495,6 +500,7 @@ int __attribute__ ((noinline)) main_menu() {
   uint8_t* menutexts[MAIN_MENU_NB_ENTRIES];
   menutexts[0] =   (uint8_t*)&MENU_GETPWD;
   menutexts[1] =   (uint8_t*)&MENU_MANAGEPWD;
+  menutexts[2] =   (uint8_t*)&MENU_SETUP;
   return generic_menu(MAIN_MENU_NB_ENTRIES, menutexts);
 }
 
@@ -523,6 +529,14 @@ int __attribute__ ((noinline)) menu_send_pwd() {
   menutexts[2] =   (uint8_t*)&MENU_SENDPWD_LOGINPWD;
   return generic_menu(MENU_SENDPWD_NB_ENTRIES, menutexts);
 }
+
+int __attribute__ ((noinline)) menu_setup() {
+  uint8_t* menutexts[MENU_SETUP_NB_ENTRIES];
+  menutexts[0] =   (uint8_t*)&MENU_SETUP_CONFIG_BT_MODULE;
+  menutexts[1] =   (uint8_t*)&MENU_SETUP_CONNECT_BT_MODULE;
+  return generic_menu(MENU_SETUP_NB_ENTRIES, menutexts);
+}
+
 
 void __attribute__ ((noinline)) putRandomChars( char* dst, uint8_t len)
 {
@@ -875,6 +889,26 @@ void setRng()
   digitalWrite(ENTROPY_PIN,1);
 }
 
+void __attribute__ ((noinline)) getDeviceBTAddress()
+{
+  char BTAddress[USERDATA_BT_ADDRESS_LEN+1];  
+  char buf[32];
+  
+  // Print invite
+  getStringFromFlash(buf, (uint8_t*)&BT_ADDRESS_INPUT);
+  
+  // Only uppercase letters and numbers are required
+  MultilineInputBuffer mlib;
+  mlib.nbBuffers=2;
+  mlib.buffers[0]= UpperCaseLetters;
+  mlib.buffer_size[0] = strlen(mlib.buffers[0]);
+  mlib.buffers[1]= Numbers;
+  mlib.buffer_size[1] = strlen(mlib.buffers[1]);
+
+  // Query device BT address
+  getStringFromUser(BTAddress, USERDATA_BT_ADDRESS_LEN, buf, mlib );
+}
+
 /////////////////////
 // INITIAL FORMATTING 
 /////////////////////
@@ -1029,6 +1063,61 @@ void testButtons() {
   }
 }
 
+void configureRN42() {
+
+  char targetBTAddress[USERDATA_BT_ADDRESS_LEN+1];  
+  char buf[32];
+  
+  // Print invite
+  getStringFromFlash(buf, (uint8_t*)&BT_ADDRESS_INPUT);
+  
+  // Only uppercase letters and numbers are required
+  MultilineInputBuffer mlib;
+  mlib.nbBuffers=2;
+  mlib.buffers[0]= UpperCaseLetters;
+  mlib.buffer_size[0] = strlen(mlib.buffers[0]);
+  mlib.buffers[1]= Numbers;
+  mlib.buffer_size[1] = strlen(mlib.buffers[1]);
+
+  // Query device BT address from user
+  getStringFromUser(targetBTAddress, USERDATA_BT_ADDRESS_LEN, buf, mlib );
+
+  // Device should not be connected over bluetooth at this point
+  
+  Serial.print("$$$");
+  delay(250);
+
+  // Restore factory settings
+  Serial.print("SF,1\n");
+  delay(250);
+
+  // Setup the HID profile so that device is recognized as a keyboard
+  Serial.print("S~,6\n");
+  delay(250);
+
+  // Setup the name prefix that will appear on the remote device
+  Serial.print("S-,bluekey\n");
+  delay(250);
+
+  // Store the BT address of the remote device, for automatic connection at power-up
+  Serial.print("SR,");
+  Serial.print(targetBTAddress);
+  Serial.print("\n");
+  delay(250);
+
+  // Setup the HID profile so that device is recognized as a keyboard
+  Serial.print("R,1\n");
+}
+
+void connectRN42() {
+  
+  Serial.print("$$$");
+  delay(250);
+ 
+  // Connect using pre-stored BT address (via SR,<...> command)
+  Serial.print("C\n"); 
+}
+
 ////////////////////
 // INITIALISATION
 ////////////////////
@@ -1066,7 +1155,11 @@ void setup()   {
 
   // RN42 is configured by default to use 115200 bauds on UART links
   Serial.begin(115200);
-      
+  
+  // Auto-connect to stored remote bluetooth device address
+  // may fail if no device BT address was set yet, but is harmless   
+  connectRN42();
+  
   // Setup input I/Os connected to buttons
   for (byte i=0; i < NUMBUTTONS; i++) {
     pinMode(buttons[i], INPUT_PULLUP);
@@ -1111,6 +1204,84 @@ void printNbEntries()
   display.display();
   delay(2000);
 
+}
+
+// this function is mostly here to document the way to READ responses
+// from RN42 while in command mode.
+void getRN42FirmwareVersion() {
+
+  display.clearDisplay();
+  display.setCursor(0,0);
+
+  // Enter RN42 command mode
+  Serial.print("$$$");
+  delay(50);
+
+  // By default the RN42 uses 115200 bauds in RX and TX
+  // But somehow the arduino pro mini cannot handle the 115200 bauds in the RX direction
+  // So set RN42 temporary baud rate to 9600
+  Serial.print("U,9600,N\n");
+
+  // Change baud rate on arduino TX side to 9600 too
+  Serial.flush();
+  Serial.begin(9600);
+  delay(250);
+
+  // Flush RX buffer just in case  
+  while(Serial.available()) Serial.read();
+  
+  // Enter command mode again
+  Serial.print("$$$");
+  
+  // wait a bit to make sure response ("CMD") has started arriving
+  delay(5);
+
+  // read & display incoming response bytes
+  while(Serial.available()) {
+    display.print((char)Serial.read());
+  }
+
+  // Send command to get RN42 firmware version
+  delay(50);
+  Serial.print("V\n");
+  
+  // wait a bit to make sure response (FW version text) has started arriving
+  delay(10);
+
+  // read & display incoming response bytes
+  while(Serial.available()) {
+    display.print((char)Serial.read());
+  }
+
+  // Exit command mode
+  delay(250); 
+  Serial.print("---\n");
+  
+  // wait a bit to make sure response ("END") has started arriving
+  delay(10);
+
+  // read & display incoming response bytes
+  while(Serial.available()) {
+    display.print((char)Serial.read());
+  }
+ 
+  display.display();
+
+  // Wait here until B button is pushed 
+  while (1) {
+  
+      check_buttons();
+  
+      if (button_justpressed[BButtonIndex]) {
+        break;
+      }
+  
+    delay(1);
+  }
+
+  // Restore arduino baud rate to 115200.
+  Serial.flush();
+  Serial.begin(115200);
 }
 
 void testFunction1() {
@@ -1240,9 +1411,10 @@ void loop() {
             delay(MSG_DISPLAY_DELAY);
           }          
           if (entry_choice2 != RET_CANCEL) {
-            if (confirmChoice((char*)"del entry?")) 
+            if (confirmChoice((char*)"del entry?")) {
               displayCenteredMessageFromStoredString((uint8_t*)&DELETING_ENTRY); 
               ES.removeEntry(entry_choice2);
+            }
           } 
           break;
                   
@@ -1266,6 +1438,27 @@ void loop() {
           break;      
       }
       break;
+
+    case MAIN_MENU_SETUP:
+      // Launch sub-menu
+      entry_choice1 = menu_setup();
+      switch (entry_choice1) {
+
+        case SETUP_MENU_BTCONF:
+          if (confirmChoice((char*)"Sure?")) {
+            configureRN42();
+          }
+          break;
+        
+        case SETUP_MENU_BTCONNECT:
+          connectRN42();
+          break;
+                  
+        default:
+          break;      
+      }
+      break;
+      
    default:
       break;   
   }
