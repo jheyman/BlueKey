@@ -1,5 +1,5 @@
 //#define BLUEKEY_KNOB
-#define BLUEKEY_SNES
+#define BLUEKEY_NES
 
 #ifdef BLUEKEY_KNOB
 #include "BlueKey_Knob.h"

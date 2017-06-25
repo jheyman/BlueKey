@@ -198,7 +198,7 @@ bool __attribute__ ((noinline)) confirmChoice(char* text)
 
 char UpperCaseLetters[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 char LowerCaseLetters[]="abcdefghijklmnopqrstuvwxyz";
-char SpecialCharacters[]="!\"#$%&'()*+,-./";
+char SpecialCharacters[]="@!\"#$%&'()*+,-./";
 char Numbers[]="0123456789";
 
 bool __attribute__ ((noinline)) getStringFromUser( char* dst, const uint8_t numChars, const char* invite, MultilineInputBuffer mlib)
@@ -1105,7 +1105,7 @@ void configureRN42() {
   Serial.print("\n");
   delay(250);
 
-  // Setup the HID profile so that device is recognized as a keyboard
+  // Reboot
   Serial.print("R,1\n");
 }
 
