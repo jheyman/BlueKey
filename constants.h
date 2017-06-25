@@ -15,8 +15,6 @@
 
 #ifdef BLUEKEY_SNES
 
-
-
 #define UpButtonPin 4
 #define UpButtonIndex 0
 
@@ -58,6 +56,35 @@
 
 #endif
 
+
+#ifdef BLUEKEY_NES
+
+#define UpButtonPin 2
+#define UpButtonIndex 0
+
+#define DownButtonPin 3
+#define DownButtonIndex 1
+
+#define LeftButtonPin 4
+#define LeftButtonIndex 2
+
+#define RightButtonPin 5
+#define RightButtonIndex 3
+
+#define AButtonPin 6
+#define AButtonIndex 4
+
+#define BButtonPin 7
+#define BButtonIndex 5
+
+#define StartButtonPin 9
+#define StartButtonIndex 6
+
+#define SelectButtonPin 8
+#define SelectButtonIndex 7
+
+#endif
+
 #define BT_connected_pin 8
 #define ENTROPY_PIN A3
 
@@ -93,6 +120,9 @@
 #define ACCOUNT_TITLE_LENGTH 12
 #define ACCOUNT_LOGIN_LENGTH 12
 
+// Bluetooth address format is 12 letters/numbers
+#define USERDATA_BT_ADDRESS_LEN 12
+
 #define MSG_DISPLAY_DELAY 1000
 
 #define RET_EMPTY -1
@@ -106,7 +136,8 @@ typedef struct {
 
 enum MainMenuSelection {
   MAIN_MENU_SENDPWD = 0,
-  MAIN_MENU_MANAGEPWD
+  MAIN_MENU_MANAGEPWD,
+  MAIN_MENU_SETUP
 };
 
 enum SendPasswordMenuSelection {
@@ -128,5 +159,11 @@ enum SetPasswordMenuSelection {
   SETPWD_MENU_GENERATE = 0,
   SETPWD_MENU_MANUALLY,
 };
+
+enum SetupMenuSelection {
+  SETUP_MENU_BTCONF = 0,
+  SETUP_MENU_BTCONNECT,
+};
+
 #endif
 

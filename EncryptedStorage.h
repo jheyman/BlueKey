@@ -41,7 +41,7 @@ class EncryptedStorage
 public:
   void initialize();
   bool readHeader(char* deviceName);
-  
+
   bool unlock( byte* k );
   void lock();
 
