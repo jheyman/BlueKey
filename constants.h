@@ -59,33 +59,32 @@
 
 #ifdef BLUEKEY_NES
 
-#define UpButtonPin 2
+#define UpButtonPin 10
 #define UpButtonIndex 0
 
-#define DownButtonPin 3
+#define DownButtonPin 8
 #define DownButtonIndex 1
 
-#define LeftButtonPin 4
+#define LeftButtonPin 9
 #define LeftButtonIndex 2
 
-#define RightButtonPin 5
+#define RightButtonPin 7
 #define RightButtonIndex 3
 
-#define AButtonPin 6
+#define AButtonPin 3
 #define AButtonIndex 4
 
-#define BButtonPin 7
+#define BButtonPin 4
 #define BButtonIndex 5
 
-#define StartButtonPin 9
+#define StartButtonPin 5
 #define StartButtonIndex 6
 
-#define SelectButtonPin 8
+#define SelectButtonPin 6
 #define SelectButtonIndex 7
 
 #endif
 
-#define BT_connected_pin 8
 #define ENTROPY_PIN A3
 
 
